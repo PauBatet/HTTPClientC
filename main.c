@@ -7,6 +7,20 @@
 #include<arpa/inet.h>
 #include<stdlib.h>
 
+
+void send_response(int client_socket, const char *responseBody) {
+	int content_length = strlen(responseBody);
+	char response_header[256];
+	snprintf(response_header, sizeof(response_header),
+			"HTTP/1.1 200 OK\r\n"
+			"Content-Type: text/html\r\n"
+			"Content-Length %d\r\n"
+			"\r\n",
+			content_length);
+	write(client_socket, response_header, strlen(response_header));
+	write(client_socket, responseBody, content_length);
+}
+
 int main() {
 	//Create socket
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -64,9 +78,13 @@ int main() {
 			printf("Client message: %s\n", buffer);
 		}
 
+		char method[10], path[100], version[10];
+		sscanf(buffer, "%s %s %s", method, path, version);
+		printf("Method: %s\nPath: %s\nVersion: %s\n", method, path, version);
+
 		//Send data
-		char *response = "Hello World!";
-		write(new_socket, response, strlen(response));
+		char *responseBody = "<h1>Hello World!</h1>";
+		send_response(new_socket, responseBody);
 
 		//Close
 		close(new_socket);
