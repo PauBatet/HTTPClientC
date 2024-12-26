@@ -1,7 +1,7 @@
 #ifndef HTTPFRAMEWORK_H
 #define HTTPFRAMEWORK_H
 
-#include"HTTPServer.h"
+#include"HTMLTemplating.h"
 
 typedef struct {
 	const char *path;

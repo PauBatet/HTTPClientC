@@ -1,8 +1,7 @@
 #include"HTTPFramework.h"
 
 void home (HTTPRequest *request) {
-	const char *body = "<h1>Hello, this is my Home Page</h1>";
-	HTTPServer_send_response(request, body,"",0,"");
+	render_html(request, "home.html");
 }
 
 void about (HTTPRequest *request) {
