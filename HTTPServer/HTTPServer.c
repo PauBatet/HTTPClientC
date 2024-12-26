@@ -87,15 +87,30 @@ HTTPRequest HTTPServer_listen(HTTPServer *server) {
 	return request;
 }
 
-void HTTPServer_send_response(HTTPRequest *request, const char *body, const char *content_type) {
+const char *get_default_status_message(int status_code) {
+	switch(status_code) {
+		case 200: return "OK";
+		case 201: return "Created";
+		case 400: return "Bad Request";
+		case 404: return "Not Found";
+		case 500: return "Internal Server Error";
+		case 503: return "Service Unavailable";
+		default: return "Unknown Status";
+	}
+}
+
+void HTTPServer_send_response(HTTPRequest *request, const char *body, const char *content_type, int status_code, const char *status_message) {
+	const char *final_status_message = (status_message && strlen(status_message) > 0)? status_message:get_default_status_message(status_code);
+	const char *final_content_type = (content_type && strlen(content_type) > 0)? content_type: "text/html";	
+	int final_status_code = (status_code > 0)?status_code:200;
 	int content_length = strlen(body);
-	char response_header[256];
+	char response_header[4096];
 	snprintf(response_header, sizeof(response_header),
-			"HTTP/1.1 200 OK\r\n"
+			"HTTP/1.1 %d %s\r\n"
 			"Content-Type: %s\r\n"
 			"Content-Length %d\r\n"
 			"\r\n",
-			content_type, content_length);
+			status_code, final_status_message, final_content_type, content_length);
 	write(request->client_socket, response_header, strlen(response_header));
 	write(request->client_socket, body, content_length);
 	close(request->client_socket);

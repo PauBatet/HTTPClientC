@@ -21,11 +21,11 @@ int main() {
 
 		if (strcmp(request.path, "/")==0){
 			const char *body = "<h1>Welcome to my HTTP serrver!</h1>";
-			HTTPServer_send_response(&request, body, "text/html");
+			HTTPServer_send_response(&request, body,"",0,"");
 		}
 		else {
-			const char *body = "<h1>404 Not Found</h1>";
-			HTTPServer_send_response(&request, body, "text/html");
+			const char *body = "";
+			HTTPServer_send_response(&request, body, "text/html", 404, "");
 		}
 	}
 

@@ -22,7 +22,7 @@ HTTPServer *HTTPServer_create(int port);
  
 HTTPRequest HTTPServer_listen(HTTPServer *server);
 
-void HTTPServer_send_response(HTTPRequest *request, const char *body, const char *content_type);
+void HTTPServer_send_response(HTTPRequest *request, const char *body, const char *content_type, int status_code, const char *status_message);
 
 void HTTPServer_destroy(HTTPServer *server);
 
