@@ -5,5 +5,7 @@
 Route routes[] = {
 	{"/", home},
 	{"/about", about},
+	{"/ABT", abt},
+	{"/delay", Delay30},
 	{NULL, NULL},
 };

@@ -3,6 +3,15 @@
 
 #include"HTTPServer.h"
 
-void render_html(HTTPRequest *request, const char *file_path);
+// Function pointer type for value conversion
+typedef char* (*ValueConverter)(const void* value);
+
+typedef struct {
+    const char* key;
+    const void* value;
+    ValueConverter converter;
+} TemplateParam;
+
+void render_html(HTTPRequest *request, const char *file_path, TemplateParam* params, int param_count);
 
 #endif
