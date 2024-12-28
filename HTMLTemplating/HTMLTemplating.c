@@ -188,3 +188,33 @@ void render_html(HTTPRequest *request, const char *file_path, TemplateParam* par
     free(processed_content);
     free(file_content);
 }
+
+char *process_html(const char *file_path, TemplateParam* params, int param_count) {
+    FILE *file = fopen(file_path, "r");
+    if (!file) {
+        return "";
+    }
+
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *file_content = (char *)malloc(file_size + 1);
+    if (!file_content) {
+        fclose(file);
+        return "";
+    }
+
+    fread(file_content, 1, file_size, file);
+    file_content[file_size] = '\0';
+    fclose(file);
+
+    char* processed_content = replace_template_params(file_content, params, param_count);
+    if (!processed_content) {
+        free(file_content);
+        return "";
+    }
+
+    free(file_content);
+    return processed_content;
+}

@@ -55,27 +55,15 @@ void home(HTTPRequest *request) {
         return buffer;
     }
 
-    char* convert_jobs(const void* value) {
-        const struct Job* jobs = (const struct Job*)value;
-        char* buffer = malloc(4096);
-        buffer[0] = '\0';
-        
-        for (int i = 0; i < 3; i++) {
-            char job_html[1024];
-            snprintf(job_html, sizeof(job_html),
-                "<div class=\"job\">"
-                    "<div>"
-                        "<h3>%s</h3>"
-                        "<p>%s</p>"
-                    "</div>"
-                    "<a href=\"#\" class=\"button\">Details</a>"
-                "</div>",
-                jobs[i].title, jobs[i].description
-            );
-            strcat(buffer, job_html);
-        }
-        
-        return buffer;
+    char *jobsTemplate = malloc(4096);
+    jobsTemplate[0] = '\0';
+
+    for (int i = 0; i < 3; i++) {
+        TemplateParam params[] = {
+            {"title", jobs[i].title, NULL},
+            {"description", jobs[i].description, NULL}
+        };
+        strcat(jobsTemplate, process_html("label_content.html", params, 2));
     }
 
     // Create the template parameters
@@ -86,7 +74,7 @@ void home(HTTPRequest *request) {
         {"image_url", &image_url, NULL},
         {"year", "2024", NULL},
         {"projects", projects, convert_projects},
-        {"jobs", jobs, convert_jobs}
+        {"jobs", jobsTemplate, NULL}
     };
 
     render_html(request, "home.html", params, 7);

@@ -14,4 +14,6 @@ typedef struct {
 
 void render_html(HTTPRequest *request, const char *file_path, TemplateParam* params, int param_count);
 
+char *process_html(const char *file_path, TemplateParam* params, int param_count);
+
 #endif
