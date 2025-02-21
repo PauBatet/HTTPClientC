@@ -129,15 +129,18 @@ void *worker_thread(void *arg) {
 
 // Signal handler for graceful shutdown
 void signal_handler(int sig) {
-    printf("\nShutting down server...\n");
-    destroy_queue(&queue); // Stop the queue and wake up threads
-    HTTPServer_destroy(server); // Close the server socket
-    exit(0); // Exit the program
+    if (sig == SIGINT || sig == SIGTERM) {
+        printf("\nShutting down server...\n");
+        destroy_queue(&queue);
+        HTTPServer_destroy(server);
+        exit(0);
+    }
 }
 
 int main() {
     // Set up signal handling
     signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     server = HTTPServer_create(8080);
     if (!server) {
