@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 // Define the FIFO queue
 typedef struct RequestNode {
@@ -137,7 +138,7 @@ void signal_handler(int sig) {
     }
 }
 
-int main() {
+int run_worker() {
     // Set up signal handling
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -181,3 +182,23 @@ int main() {
 
     return 0;
 }
+
+int main() {
+    while (1) {
+        pid_t pid = fork();
+
+        if (pid == 0) {
+            // CHILD → run the server normally
+            exit(run_worker());
+        }
+
+        // PARENT → supervisor
+        int status;
+        waitpid(pid, &status, 0);
+
+        printf("Worker died with status %d. Restarting in 1 second...\n", status);
+
+        sleep(1);
+    }
+}
+

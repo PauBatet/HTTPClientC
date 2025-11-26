@@ -1,5 +1,5 @@
 #include"HTTPFramework.h"
-#include"views.c"
+#include"views.h"
 #include<stddef.h>
 
 Route routes[] = {

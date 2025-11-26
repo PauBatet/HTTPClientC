@@ -45,7 +45,7 @@ HTTPServer *HTTPServer_create(int port) {
 		return NULL;
 	}
 
-	printf("Server created on port %d\n", port);
+	printf("Server created on port http://localhost:%d\n", port);
 	return server;
 }
 
@@ -75,7 +75,7 @@ HTTPRequest HTTPServer_listen(HTTPServer *server) {
 	char *body_start = strstr(buffer, "\r\n\r\n");
 	
 	if (headers_start) {
-		size_t headers_len = body_start?(body_start - headers_start):strlen(headers_start);
+		size_t headers_len = body_start?(size_t)(body_start - headers_start):strlen(headers_start);
 		strncpy(request.headers, headers_start+2, headers_len-2);
 	}
 
@@ -110,7 +110,7 @@ void HTTPServer_send_response(HTTPRequest *request, const char *body, const char
 			"Content-Type: %s\r\n"
 			"Content-Length %d\r\n"
 			"\r\n",
-			status_code, final_status_message, final_content_type, content_length);
+			final_status_code, final_status_message, final_content_type, content_length);
 	write(request->client_socket, response_header, strlen(response_header));
 	write(request->client_socket, body, content_length);
 	close(request->client_socket);
