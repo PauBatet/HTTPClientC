@@ -93,8 +93,9 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
     char* result = strdup(template);
     
     for (int i = 0; i < param_count; i++) {
-        char search_pattern[256];
-        snprintf(search_pattern, sizeof(search_pattern), "{{%s}}", params[i].key);
+        size_t len = snprintf(NULL, 0, "{{%s}}", params[i].key) + 1;
+        char *search_pattern = malloc(len);
+        snprintf(search_pattern, len, "{{%s}}", params[i].key);
         
         // Remove spaces from search pattern
         char* clean_pattern = strdup(search_pattern);
@@ -152,8 +153,9 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
 }
 
 void render_html(HTTPRequest *request, const char *file_path, TemplateParam* params, int param_count) {
-    char fullpath[512];
-    snprintf(fullpath, sizeof(fullpath), "%s/%s", TEMPLATE_DIR, file_path);
+    size_t len = snprintf(NULL, 0, "%s/%s", TEMPLATE_DIR, file_path) + 1;
+    char *fullpath = malloc(len);
+    snprintf(fullpath, len, "%s/%s", TEMPLATE_DIR, file_path);
     FILE *file = fopen(fullpath, "r");
     if (!file) {
         const char *body = "<h1>404 Not Found</h1>";
@@ -192,8 +194,9 @@ void render_html(HTTPRequest *request, const char *file_path, TemplateParam* par
 }
 
 char *process_html(const char *file_path, TemplateParam* params, int param_count) {
-    char fullpath[512];
-    snprintf(fullpath, sizeof(fullpath), "%s/%s", TEMPLATE_DIR, file_path);
+    size_t len = snprintf(NULL, 0, "%s/%s", TEMPLATE_DIR, file_path) + 1;
+    char *fullpath = malloc(len);
+    snprintf(fullpath, len, "%s/%s", TEMPLATE_DIR, file_path);
     FILE *file = fopen(fullpath, "r");
     if (!file) {
         return "";
