@@ -93,8 +93,9 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
     char* result = strdup(template);
     
     for (int i = 0; i < param_count; i++) {
-        char search_pattern[256];
-        snprintf(search_pattern, sizeof(search_pattern), "{{%s}}", params[i].key);
+        size_t len = snprintf(NULL, 0, "{{%s}}", params[i].key) + 1;
+        char *search_pattern = malloc(len);
+        snprintf(search_pattern, len, "{{%s}}", params[i].key);
         
         // Remove spaces from search pattern
         char* clean_pattern = strdup(search_pattern);
@@ -152,7 +153,10 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
 }
 
 void render_html(HTTPRequest *request, const char *file_path, TemplateParam* params, int param_count) {
-    FILE *file = fopen(file_path, "r");
+    size_t len = snprintf(NULL, 0, "%s/%s", TEMPLATE_DIR, file_path) + 1;
+    char *fullpath = malloc(len);
+    snprintf(fullpath, len, "%s/%s", TEMPLATE_DIR, file_path);
+    FILE *file = fopen(fullpath, "r");
     if (!file) {
         const char *body = "<h1>404 Not Found</h1>";
         HTTPServer_send_response(request, body, "", 404, "");
@@ -165,9 +169,9 @@ void render_html(HTTPRequest *request, const char *file_path, TemplateParam* par
 
     char *file_content = (char *)malloc(file_size + 1);
     if (!file_content) {
+        fclose(file);
         const char *body = "<h1>500 Internal Server Error</h1>";
         HTTPServer_send_response(request, body, "", 500, "");
-        fclose(file);
         return;
     }
 
@@ -176,23 +180,25 @@ void render_html(HTTPRequest *request, const char *file_path, TemplateParam* par
     fclose(file);
 
     char* processed_content = replace_template_params(file_content, params, param_count);
+    free(file_content);
     if (!processed_content) {
         const char *body = "<h1>500 Internal Server Error</h1>";
         HTTPServer_send_response(request, body, "", 500, "");
-        free(file_content);
         return;
     }
 
     HTTPServer_send_response(request, processed_content, "", 0, "");
 
     free(processed_content);
-    free(file_content);
 }
 
 char *process_html(const char *file_path, TemplateParam* params, int param_count) {
-    FILE *file = fopen(file_path, "r");
+    size_t len = snprintf(NULL, 0, "%s/%s", TEMPLATE_DIR, file_path) + 1;
+    char *fullpath = malloc(len);
+    snprintf(fullpath, len, "%s/%s", TEMPLATE_DIR, file_path);
+    FILE *file = fopen(fullpath, "r");
     if (!file) {
-        return "";
+        return strdup("");
     }
 
     fseek(file, 0, SEEK_END);
@@ -202,7 +208,7 @@ char *process_html(const char *file_path, TemplateParam* params, int param_count
     char *file_content = (char *)malloc(file_size + 1);
     if (!file_content) {
         fclose(file);
-        return "";
+        return strdup("");
     }
 
     fread(file_content, 1, file_size, file);
@@ -210,11 +216,10 @@ char *process_html(const char *file_path, TemplateParam* params, int param_count
     fclose(file);
 
     char* processed_content = replace_template_params(file_content, params, param_count);
+    free(file_content);
     if (!processed_content) {
-        free(file_content);
-        return "";
+        return strdup("");
     }
 
-    free(file_content);
     return processed_content;
 }

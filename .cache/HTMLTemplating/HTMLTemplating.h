@@ -2,7 +2,7 @@
 #define HTML_TEMPLATING_H
 
 #include"HTTPServer.h"
-
+#include "config.h"
 // Function pointer type for value conversion
 typedef char* (*ValueConverter)(const void* value);
 
