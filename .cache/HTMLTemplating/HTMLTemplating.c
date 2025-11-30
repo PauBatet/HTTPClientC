@@ -152,7 +152,9 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
 }
 
 void render_html(HTTPRequest *request, const char *file_path, TemplateParam* params, int param_count) {
-    FILE *file = fopen(file_path, "r");
+    char fullpath[512];
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", TEMPLATE_DIR, file_path);
+    FILE *file = fopen(fullpath, "r");
     if (!file) {
         const char *body = "<h1>404 Not Found</h1>";
         HTTPServer_send_response(request, body, "", 404, "");
@@ -190,7 +192,9 @@ void render_html(HTTPRequest *request, const char *file_path, TemplateParam* par
 }
 
 char *process_html(const char *file_path, TemplateParam* params, int param_count) {
-    FILE *file = fopen(file_path, "r");
+    char fullpath[512];
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", TEMPLATE_DIR, file_path);
+    FILE *file = fopen(fullpath, "r");
     if (!file) {
         return "";
     }

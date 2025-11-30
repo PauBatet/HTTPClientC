@@ -143,7 +143,7 @@ int run_worker() {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    server = HTTPServer_create(8080);
+    server = HTTPServer_create(SERVER_PORT);
     if (!server) {
         printf("Failed to create server\n");
         return 1;
