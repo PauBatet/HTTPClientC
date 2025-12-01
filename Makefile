@@ -1,8 +1,9 @@
 # Project structure
 SRC_DIR = ./
 CACHE_DIR = $(SRC_DIR)/.cache
-HTTP_SERVER_DIR = $(CACHE_DIR)/HTTPServer
-HTML_TEMPLATING_DIR = $(CACHE_DIR)/HTMLTemplating
+ENGINE_DIR = $(SRC_DIR)/.engine
+HTTP_SERVER_DIR = $(ENGINE_DIR)/HTTPServer
+HTML_TEMPLATING_DIR = $(ENGINE_DIR)/HTMLTemplating
 BUILD_DIR = $(CACHE_DIR)/build
 
 # Compiler and flags
@@ -10,12 +11,13 @@ CC = gcc
 CFLAGS = -Wall -Wextra -g -Wa,--noexecstack \
 					-I$(SRC_DIR) \
 					-I$(CACHE_DIR) \
+					-I$(ENGINE_DIR) \
 					-I$(HTML_TEMPLATING_DIR) \
 					-I$(HTTP_SERVER_DIR)
 
 # Source files
 SRCS = \
-		$(CACHE_DIR)/main.c \
+		$(ENGINE_DIR)/main.c \
 		$(SRC_DIR)/config.c \
 		$(HTML_TEMPLATING_DIR)/HTMLTemplating.c \
 		$(HTTP_SERVER_DIR)/HTTPServer.c \
@@ -39,7 +41,7 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 		$(CC) $(CFLAGS) -o $@ $^
 
-$(BUILD_DIR)/main.o: $(CACHE_DIR)/main.c | $(BUILD_DIR)
+$(BUILD_DIR)/main.o: $(ENGINE_DIR)/main.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/config.o: $(SRC_DIR)/config.c | $(BUILD_DIR)
@@ -59,9 +61,10 @@ $(BUILD_DIR):
 		mkdir -p $(BUILD_DIR)
 
 clean:
-		rm -rf $(BUILD_DIR)
+		rm -rf $(CACHE_DIR)
 
 run: $(TARGET)
+		mkdir -p $(BUILD_DIR)
 		./$(TARGET)
 
 .PHONY: all clean run
