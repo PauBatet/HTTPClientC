@@ -4,6 +4,7 @@ CACHE_DIR = $(SRC_DIR)/.cache
 ENGINE_DIR = $(SRC_DIR)/.engine
 HTTP_SERVER_DIR = $(ENGINE_DIR)/HTTPServer
 HTML_TEMPLATING_DIR = $(ENGINE_DIR)/HTMLTemplating
+DATABASE_DIR = $(ENGINE_DIR)/Database
 BUILD_DIR = $(CACHE_DIR)/build
 
 # Compiler and flags
@@ -13,7 +14,8 @@ CFLAGS = -Wall -Wextra -g -Wa,--noexecstack \
 					-I$(CACHE_DIR) \
 					-I$(ENGINE_DIR) \
 					-I$(HTML_TEMPLATING_DIR) \
-					-I$(HTTP_SERVER_DIR)
+					-I$(HTTP_SERVER_DIR) \
+					-I$(DATABASE_DIR)
 
 # Source files
 SRCS = \
@@ -21,6 +23,8 @@ SRCS = \
 		$(SRC_DIR)/config.c \
 		$(HTML_TEMPLATING_DIR)/HTMLTemplating.c \
 		$(HTTP_SERVER_DIR)/HTTPServer.c \
+		$(DATABASE_DIR)/Database.c \
+		$(DATABASE_DIR)/sqlite3.c \
 		$(SRC_DIR)/routes.c
 
 # Object files
@@ -29,6 +33,8 @@ OBJS = \
 		$(BUILD_DIR)/config.o \
 		$(BUILD_DIR)/HTMLTemplating.o \
 		$(BUILD_DIR)/HTTPServer.o \
+		$(BUILD_DIR)/Database.o \
+		$(BUILD_DIR)/sqlite3.o \
 		$(BUILD_DIR)/routes.o
 
 # Output binary
@@ -53,6 +59,12 @@ $(BUILD_DIR)/HTMLTemplating.o: $(HTML_TEMPLATING_DIR)/HTMLTemplating.c | $(BUILD
 $(BUILD_DIR)/HTTPServer.o: $(HTTP_SERVER_DIR)/HTTPServer.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/Database.o: $(DATABASE_DIR)/Database.c | $(BUILD_DIR)
+		$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/sqlite3.o: $(DATABASE_DIR)/sqlite3.c | $(BUILD_DIR)
+		$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/routes.o: $(SRC_DIR)/routes.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
@@ -61,7 +73,7 @@ $(BUILD_DIR):
 		mkdir -p $(BUILD_DIR)
 
 clean:
-		rm -rf $(CACHE_DIR)
+		rm -rf $(BUILD_DIR)
 
 run: $(TARGET)
 		mkdir -p $(BUILD_DIR)

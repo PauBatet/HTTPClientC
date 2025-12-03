@@ -1,4 +1,5 @@
 #include "HTTPFramework.h"
+#include "Database/Database.h"
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
@@ -25,6 +26,7 @@ typedef struct {
 // Global request queue
 RequestQueue queue;
 HTTPServer *server;
+Database *db;
 
 // Initialize the request queue
 void init_queue(RequestQueue *q) {
@@ -133,6 +135,7 @@ void signal_handler(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
         printf("\nShutting down server...\n");
         destroy_queue(&queue);
+        db_close(db);
         HTTPServer_destroy(server);
         exit(0);
     }
@@ -149,11 +152,15 @@ int run_worker() {
         return 1;
     }
 
+    if (!db_open(&db, "app.db")) {
+        printf("Failed to open database\n");
+        return 1;
+    }
+
     // Initialize the request queue
     init_queue(&queue);
 
     // Create a pool of worker threads
-    const int NUM_WORKERS = 4;
     pthread_t workers[NUM_WORKERS];
     for (int i = 0; i < NUM_WORKERS; i++) {
         pthread_create(&workers[i], NULL, worker_thread, NULL);
@@ -172,8 +179,9 @@ int run_worker() {
         enqueue(&queue, &request);
     }
 
-    // Cleanup (not reached in this example)
+    // Cleanup (should not be reached but just in case)
     destroy_queue(&queue);
+    db_close(db);
     HTTPServer_destroy(server);
 
     for (int i = 0; i < NUM_WORKERS; i++) {
