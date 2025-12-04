@@ -2,5 +2,6 @@
 
 Route routes[] = {
 	{"/", home},
-  {"/about", about}
+  {"/about", about},
+  {"/create-user", create_user_view}
 };

@@ -58,36 +58,6 @@ bool is_number(const void* value, size_t size) {
     return false;
 }
 
-// Helper function to infer the type and return appropriate converter
-ValueConverter infer_converter(const void* value) {
-    // Try to infer string first
-    if (is_string(value)) {
-        return convert_string;
-    }
-    
-    // Try to infer bool (check both 0/1 and true/false patterns)
-    const bool* bool_val = (const bool*)value;
-    if (sizeof(bool) == 1 && (*bool_val == 0 || *bool_val == 1)) {
-        return convert_bool;
-    }
-    
-    // Try to infer float
-    if (is_number(value, sizeof(float))) {
-        const float f = *(const float*)value;
-        if (f != (int)f) {  // Has decimal part
-            return convert_float;
-        }
-    }
-    
-    // Try to infer int
-    if (is_number(value, sizeof(int))) {
-        return convert_int;
-    }
-    
-    // Default to string if we can't determine the type
-    return convert_string;
-}
-
 // Helper function to find and replace template parameters
 char* replace_template_params(const char* template, TemplateParam* params, int param_count) {
     char* result = strdup(template);
@@ -110,10 +80,8 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
         }
         *dst = '\0';
         
-        // If no converter is provided, try to infer one
-        ValueConverter converter = params[i].converter ? 
-                                 params[i].converter : 
-                                 infer_converter(params[i].value);
+        // If no converter is provided, assume string by default
+        ValueConverter converter = params[i].converter ? params[i].converter : convert_string;
         
         // Convert the value using the converter function
         char* value_str = converter(params[i].value);

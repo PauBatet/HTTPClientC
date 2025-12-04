@@ -133,9 +133,10 @@ void *worker_thread(void *arg) {
 // Signal handler for graceful shutdown
 void signal_handler(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
-        printf("\nShutting down server...\n");
         destroy_queue(&queue);
+        printf("\nClosing Database...\n");
         db_close(db);
+        printf("Shutting down server...\n");
         HTTPServer_destroy(server);
         exit(0);
     }
@@ -149,11 +150,6 @@ int run_worker() {
     server = HTTPServer_create(SERVER_PORT);
     if (!server) {
         printf("Failed to create server\n");
-        return 1;
-    }
-
-    if (!db_open(&db, "app.db")) {
-        printf("Failed to open database\n");
         return 1;
     }
 
@@ -191,12 +187,32 @@ int run_worker() {
     return 0;
 }
 
+void init_db() {
+    //Open Database
+    if (!db_open(&db, "app.db")) {
+        printf("Failed to open database\n");
+        return;
+    }
+
+    db_exec(db,
+        "CREATE TABLE IF NOT EXISTS visits ("
+        "id INTEGER PRIMARY KEY, "
+        "count INTEGER DEFAULT 0"
+        ");"
+
+        "INSERT OR IGNORE INTO visits (id, count)"
+        "VALUES (1, 0);"
+    );
+    return;
+}
+
 int main() {
     while (1) {
         pid_t pid = fork();
 
         if (pid == 0) {
             // CHILD → run the server normally
+            init_db();
             exit(run_worker());
         }
 

@@ -3,8 +3,15 @@
 
 #include"HTTPServer.h"
 #include "config.h"
+
 // Function pointer type for value conversion
 typedef char* (*ValueConverter)(const void* value);
+
+// Converter declarations
+char* convert_string(const void* value);
+char* convert_int(const void* value);
+char* convert_float(const void* value);
+char* convert_bool(const void* value);
 
 typedef struct {
     const char* key;

@@ -1,6 +1,7 @@
 #include "Database.h"
 #include "sqlite3.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 struct Database {
     sqlite3 *conn;
@@ -25,9 +26,15 @@ void db_close(Database *db)
     free(db);
 }
 
-bool db_exec(Database *db, const char *sql)
-{
-    return sqlite3_exec(db->conn, sql, NULL, NULL, NULL) == SQLITE_OK;
+bool db_exec(Database *db, const char *sql) {
+    char *err = NULL;
+    int rc = sqlite3_exec(db->conn, sql, NULL, NULL, &err);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\nSQL: %s\n", err, sql);
+        sqlite3_free(err);
+        return false;
+    }
+    return true;
 }
 
 bool db_prepare(Database *db, const char *sql, void **stmt)

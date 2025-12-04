@@ -3,6 +3,8 @@
 
 typedef struct Database Database;
 
+extern Database *db;
+
 /* Lifecycle */
 bool db_open(Database **db, const char *path);
 void db_close(Database *db);
