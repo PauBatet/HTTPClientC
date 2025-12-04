@@ -85,6 +85,7 @@ clean:
 full_clean:
 		rm -rf $(CACHE_DIR)
 		rm -f app.db
+		rm -f GeneratedModels.h
 
 run: $(TARGET)
 		mkdir -p $(BUILD_DIR)
