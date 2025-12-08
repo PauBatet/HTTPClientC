@@ -5,6 +5,7 @@ ENGINE_DIR = $(SRC_DIR)/.engine
 HTTP_SERVER_DIR = $(ENGINE_DIR)/HTTPServer
 HTML_TEMPLATING_DIR = $(ENGINE_DIR)/HTMLTemplating
 DATABASE_DIR = $(ENGINE_DIR)/Database
+ROUTING_DIR = $(ENGINE_DIR)/Routing
 BUILD_DIR = $(CACHE_DIR)/build
 MODEL_SRCS := $(wildcard $(CACHE_DIR)/models/*.c)
 MODEL_OBJS := $(patsubst $(CACHE_DIR)/models/%.c,$(BUILD_DIR)/models_%.o,$(MODEL_SRCS))
@@ -17,7 +18,8 @@ CFLAGS = -Wall -Wextra -g -Wa,--noexecstack \
 					-I$(ENGINE_DIR) \
 					-I$(HTML_TEMPLATING_DIR) \
 					-I$(HTTP_SERVER_DIR) \
-					-I$(DATABASE_DIR)
+					-I$(DATABASE_DIR) \
+					-I$(ROUTING_DIR)
 
 # Source files
 SRCS = \
@@ -27,6 +29,7 @@ SRCS = \
 		$(HTTP_SERVER_DIR)/HTTPServer.c \
 		$(DATABASE_DIR)/Database.c \
 		$(DATABASE_DIR)/sqlite3.c \
+		$(ROUTING_DIR)/Routing.c \
 		$(SRC_DIR)/routes.c
 
 # Object files
@@ -37,6 +40,7 @@ OBJS = \
 		$(BUILD_DIR)/HTTPServer.o \
 		$(BUILD_DIR)/Database.o \
 		$(BUILD_DIR)/sqlite3.o \
+		$(BUILD_DIR)/Routing.o \
 		$(BUILD_DIR)/routes.o
 
 OBJS += $(MODEL_OBJS)
@@ -67,6 +71,9 @@ $(BUILD_DIR)/Database.o: $(DATABASE_DIR)/Database.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/sqlite3.o: $(DATABASE_DIR)/sqlite3.c | $(BUILD_DIR)
+		$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/Routing.o: $(ROUTING_DIR)/Routing.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/routes.o: $(SRC_DIR)/routes.c | $(BUILD_DIR)
