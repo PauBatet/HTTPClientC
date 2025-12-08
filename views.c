@@ -12,8 +12,9 @@ void home(HTTPRequest *request) {
 
 void create_user_view(HTTPRequest *request) {
 
-    // Create test user
+    // ---- Create test user ----
     User u = {
+        .DNI = "1",
         .name = "John",
         .age = 30,
         .email = "john@example.com",
@@ -26,18 +27,30 @@ void create_user_view(HTTPRequest *request) {
         result = "Failed to create user ❌";
     }
 
-    // ---- Fetch freshly created user from DB ----
-    User db_user = {0};
+    // ---- Fetch user DNI from route parameters ----
+    const char *dni_param = NULL;
+    for (size_t i = 0; i < request->param_count; i++) {
+        if (strcmp(request->params[i].key, "DNI") == 0) {
+            dni_param = request->params[i].value;
+            break;
+        }
+    }
 
-    bool loaded = User_read(db, u.DNI, &db_user);
+    if (!dni_param) {
+        result = "No DNI parameter provided in request ❌";
+        dni_param = u.DNI; // fallback to created user
+    }
+
+    // ---- Fetch user from DB using DNI ----
+    User db_user = {0};
+    bool loaded = User_read(db, (char *)dni_param, &db_user); // cast is safe if User_read doesn't modify the string
 
     if (!loaded) {
         result = "User created but failed to read from DB ❌";
-        // fallback to original struct so page still renders
-        db_user = u;
+        db_user = u; // fallback
     }
 
-    // ---- Template parameters from DB result ----
+    // ---- Template parameters ----
     TemplateParam params[] = {
         { "result",   result,             convert_string },
         { "name",     db_user.name,       convert_string },
@@ -47,12 +60,7 @@ void create_user_view(HTTPRequest *request) {
         { "group_id", &db_user.group_id,  convert_int    },
     };
 
-    render_html(
-        request,
-        "create_user.html",
-        params,
-        6
-    );
+    render_html(request, "create_user.html", params, 6);
 
     // ---- Cleanup strdup'ed DB strings ----
     if (loaded) {
