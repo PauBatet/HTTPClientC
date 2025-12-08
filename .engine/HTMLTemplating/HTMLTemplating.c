@@ -63,57 +63,43 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
     char* result = strdup(template);
     
     for (int i = 0; i < param_count; i++) {
-        size_t len = snprintf(NULL, 0, "{{%s}}", params[i].key) + 1;
-        char *search_pattern = malloc(len);
-        snprintf(search_pattern, len, "{{%s}}", params[i].key);
-        
-        // Remove spaces from search pattern
-        char* clean_pattern = strdup(search_pattern);
-        char* src = clean_pattern;
-        char* dst = clean_pattern;
-        while (*src) {
-            if (*src != ' ') {
-                *dst = *src;
-                dst++;
-            }
-            src++;
-        }
-        *dst = '\0';
-        
-        // If no converter is provided, assume string by default
+        const char *patterns[2];
+        char buf1[128], buf2[128];
+
+        snprintf(buf1, sizeof(buf1), "{{%s}}", params[i].key);
+        snprintf(buf2, sizeof(buf2), "{{ %s }}", params[i].key);
+
+        patterns[0] = buf1;
+        patterns[1] = buf2;
+
         ValueConverter converter = params[i].converter ? params[i].converter : convert_string;
         
         // Convert the value using the converter function
         char* value_str = converter(params[i].value);
         if (!value_str) {
-            free(clean_pattern);
             free(result);
             return NULL;
         }
-        
-        char* pos;
-        while ((pos = strstr(result, clean_pattern)) != NULL) {
-            int value_len = strlen(value_str);
-            int pattern_len = strlen(clean_pattern);
-            int new_size = strlen(result) - pattern_len + value_len + 1;
-            
-            char* new_result = (char*)malloc(new_size);
-            if (!new_result) {
-                free(clean_pattern);
-                free(value_str);
+ 
+        for (int p = 0; p < 2; p++) {
+            const char *pattern = patterns[p];
+            char *pos;
+
+            while ((pos = strstr(result, pattern)) != NULL) {
+                int value_len = strlen(value_str);
+                int pattern_len = strlen(pattern);
+                int new_size = strlen(result) - pattern_len + value_len + 1;
+
+                char *new_result = malloc(new_size);
+
+                strncpy(new_result, result, pos - result);
+                strcpy(new_result + (pos - result), value_str);
+                strcpy(new_result + (pos - result) + value_len, pos + pattern_len);
+
                 free(result);
-                return NULL;
+                result = new_result;
             }
-            
-            strncpy(new_result, result, pos - result);
-            strcpy(new_result + (pos - result), value_str);
-            strcpy(new_result + (pos - result) + value_len, pos + pattern_len);
-            
-            free(result);
-            result = new_result;
         }
-        
-        free(clean_pattern);
         free(value_str);
     }
     

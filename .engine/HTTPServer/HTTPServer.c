@@ -8,6 +8,60 @@
 #include<arpa/inet.h>
 #include<stdlib.h>
 
+bool HTTPRequest_add_param(HTTPRequest *req, const char *key, const char *value) {
+    if (!req || !key || !value) return false;
+    if (req->param_count == req->param_capacity) {
+        req->param_capacity = req->param_capacity ? req->param_capacity * 2 : 8;
+        req->params = realloc(req->params, req->param_capacity * sizeof(HTTPParam));
+        if (!req->params) return false;
+    }
+    req->params[req->param_count].key = strdup(key);
+    req->params[req->param_count].value = strdup(value);
+    req->param_count++;
+    return true;
+}
+
+static void add_param(HTTPRequest *req, const char *key, const char *value) {
+    if (req->param_count == req->param_capacity) {
+        req->param_capacity = req->param_capacity ? req->param_capacity * 2 : 8;
+        req->params = realloc(req->params,
+            req->param_capacity * sizeof(HTTPParam));
+    }
+
+    req->params[req->param_count].key = strdup(key);
+    req->params[req->param_count].value = strdup(value);
+    req->param_count++;
+}
+
+static void parse_query_params(HTTPRequest *req, char *query) {
+    char *pair = strtok(query, "&");
+
+    while (pair) {
+        char *eq = strchr(pair, '=');
+
+        if (eq) {
+            *eq = 0;
+            add_param(req, pair, eq + 1);
+        } else {
+            add_param(req, pair, "");
+        }
+
+        pair = strtok(NULL, "&");
+    }
+}
+
+void HTTPRequest_free(HTTPRequest *req) {
+    free(req->path);
+    free(req->headers);
+    free(req->body);
+
+    for (size_t i = 0; i < req->param_count; i++) {
+        free(req->params[i].key);
+        free(req->params[i].value);
+    }
+    free(req->params);
+}
+
 HTTPServer *HTTPServer_create(int port) {
 	HTTPServer *server=malloc(sizeof(HTTPServer));
 	if (!server) {
@@ -50,41 +104,78 @@ HTTPServer *HTTPServer_create(int port) {
 }
 
 HTTPRequest HTTPServer_listen(HTTPServer *server) {
-	HTTPRequest request = {0};
+    HTTPRequest request = {0};
+    request.params = NULL;
+    request.param_count = 0;
+    request.param_capacity = 0;
 
-	int client_socket;
-	struct sockaddr_in client_address;
-	socklen_t addrlen = sizeof(client_address);
-	client_socket = accept(server->server_fd, (struct sockaddr *)&client_address, &addrlen);
+    struct sockaddr_in client_address;
+    socklen_t addrlen = sizeof(client_address);
+    int client_socket = accept(
+        server->server_fd,
+        (struct sockaddr *)&client_address,
+        &addrlen
+    );
 
-	if (client_socket < 0) {
-		perror("Failed to accept connection");
-		return request;
-	}
+    if (client_socket < 0) {
+        perror("Failed to accept connection");
+        return request;
+    }
 
-	char buffer[4096] = {0};
-	int bytes_read = read(client_socket, buffer, sizeof(buffer) -1);
-	if (bytes_read <= 0) {
-		perror("Failed to read request");
-		close(client_socket);
-		return request;
-	}
+    char buffer[8192];
+    int bytes = read(client_socket, buffer, sizeof(buffer) - 1);
+    if (bytes <= 0) {
+        close(client_socket);
+        return request;
+    }
+    buffer[bytes] = '\0';
 
-	sscanf(buffer, "%s %s %s", request.method, request.path, request.version);
-	char *headers_start = strstr(buffer, "\r\n");
-	char *body_start = strstr(buffer, "\r\n\r\n");
-	
-	if (headers_start) {
-		size_t headers_len = body_start?(size_t)(body_start - headers_start):strlen(headers_start);
-		strncpy(request.headers, headers_start+2, headers_len-2);
-	}
+    char raw_path[1024];
+    sscanf(buffer, "%s %1023s %s",
+        request.method,
+        raw_path,
+        request.version
+    );
 
-	if (body_start) {
-		strncpy(request.body, body_start+4, sizeof(request.body)-1);
-	}
+    //SPLIT PATH & QUERY
+    char *query = strchr(raw_path, '?');
 
-	request.client_socket = client_socket;
-	return request;
+    if (query) {
+        *query = '\0';
+        query++;
+    }
+
+    request.path = strdup(raw_path);
+
+    if (query) {
+        char *query_copy = strdup(query);
+        parse_query_params(&request, query_copy);
+        free(query_copy);
+    }
+
+    //HEADERS
+    char *headers_start = strstr(buffer, "\r\n");
+    char *body_start    = strstr(buffer, "\r\n\r\n");
+
+    if (headers_start && body_start) {
+        size_t len = body_start - headers_start - 2;
+        request.headers = malloc(len + 1);
+
+        memcpy(request.headers, headers_start + 2, len);
+        request.headers[len] = 0;
+        request.headers_len = len;
+    }
+
+    //BODY
+    if (body_start) {
+        char *body = body_start + 4;
+
+        request.body_len = strlen(body);
+        request.body = strdup(body);
+    }
+
+    request.client_socket = client_socket;
+    return request;
 }
 
 const char *get_default_status_message(int status_code) {
@@ -108,7 +199,7 @@ void HTTPServer_send_response(HTTPRequest *request, const char *body, const char
 	snprintf(response_header, sizeof(response_header),
 			"HTTP/1.1 %d %s\r\n"
 			"Content-Type: %s\r\n"
-			"Content-Length %d\r\n"
+			"Content-Length: %d\r\n"
 			"\r\n",
 			final_status_code, final_status_message, final_content_type, content_length);
 	write(request->client_socket, response_header, strlen(response_header));

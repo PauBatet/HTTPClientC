@@ -1,7 +1,8 @@
 ## TODO
 
-# Add DB integration
-# Add URL param handling
+# Test DB things and improve them
+# Implement a module to make http requests
+
 # HTML Templating, add nested HTML/React style components
 # Make templates
 # Explore HTTPS

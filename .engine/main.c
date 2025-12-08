@@ -1,5 +1,6 @@
 #include "HTTPFramework.h"
 #include "Database/Database.h"
+#include "Routing/Routing.h"
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
@@ -97,6 +98,7 @@ void destroy_queue(RequestQueue *q) {
     while (q->front) {
         RequestNode *node = q->front;
         q->front = node->next;
+        HTTPRequest_free(&node->request);
         free(node);
     }
 
@@ -108,7 +110,14 @@ void destroy_queue(RequestQueue *q) {
 void handle_request(HTTPRequest *request) {
     printf("Processing request: %s %s\n", request->method, request->path);
     for (int i = 0; routes[i].path != NULL; i++) {
-        if (strcmp(request->path, routes[i].path) == 0) {
+        if (route_match(routes[i].path, request->path, request)) {
+            if (request->param_count > 0) {
+                for (size_t i = 0; i < request->param_count; i++) {
+                    printf("  %s = %s\n",
+                        request->params[i].key ? request->params[i].key : "(null)",
+                        request->params[i].value ? request->params[i].value : "(null)");
+                }
+            }
             routes[i].handler(request);
             return;
         }
@@ -126,6 +135,7 @@ void *worker_thread(void *arg) {
             break; // Stop signal received
         }
         handle_request(&request);
+        HTTPRequest_free(&request);
     }
     return NULL;
 }
@@ -168,6 +178,7 @@ int run_worker() {
 
         if (strlen(request.method) == 0) {
             printf("Invalid Request\n");
+            HTTPRequest_free(&request);
             continue;
         }
 
