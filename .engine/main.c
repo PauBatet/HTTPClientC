@@ -128,19 +128,6 @@ void handle_request(HTTPRequest *request) {
     HTTPServer_send_response(request, "", "", 404, "<h1>404 Not Found</h1>");
 }
 
-/*
-void handle_request(HTTPRequest *request) {
-    printf("Processing request: %s %s\n", request->method, request->path);
-    for (int i = 0; routes[i].path != NULL; i++) {
-        if (strcmp(request->path, routes[i].path) == 0) {
-            routes[i].handler(request);
-            return;
-        }
-    }
-    HTTPServer_send_response(request, "", "", 404, "<h1>404 Not Found</h1>");
-}
-*/
-
 // Worker thread function
 void *worker_thread(void *arg) {
     (void)arg; // Mark parameter as unused to suppress warnings
