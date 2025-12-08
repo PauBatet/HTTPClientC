@@ -107,7 +107,6 @@ void destroy_queue(RequestQueue *q) {
 }
 
 // Handle a single request
-
 void handle_request(HTTPRequest *request) {
     printf("Processing request: %s %s\n", request->method, request->path);
 
