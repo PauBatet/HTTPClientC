@@ -22,6 +22,5 @@ void define_models() {
     };
 
     model("Group", NULL, group_fields, 2, NULL, 0, NULL, NULL, NULL, NULL);
-
 }
 

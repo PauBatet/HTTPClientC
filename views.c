@@ -69,3 +69,4 @@ void create_user_view(HTTPRequest *request) {
         free(db_user.email);
     }
 }
+

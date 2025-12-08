@@ -109,7 +109,6 @@ void destroy_queue(RequestQueue *q) {
 // Handle a single request
 void handle_request(HTTPRequest *request) {
     printf("Processing request: %s %s\n", request->method, request->path);
-
     for (int i = 0; routes[i].path != NULL; i++) {
         if (route_match(routes[i].path, request->path, request)) {
             if (request->param_count > 0) {
@@ -123,7 +122,6 @@ void handle_request(HTTPRequest *request) {
             return;
         }
     }
-
     HTTPServer_send_response(request, "", "", 404, "<h1>404 Not Found</h1>");
 }
 

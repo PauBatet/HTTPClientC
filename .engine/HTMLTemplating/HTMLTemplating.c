@@ -80,7 +80,7 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
             free(result);
             return NULL;
         }
-        
+ 
         for (int p = 0; p < 2; p++) {
             const char *pattern = patterns[p];
             char *pos;
@@ -100,7 +100,6 @@ char* replace_template_params(const char* template, TemplateParam* params, int p
                 result = new_result;
             }
         }
-
         free(value_str);
     }
     
