@@ -124,7 +124,7 @@ static void generate_crud_files(Model *m) {
     // Format based on primary key type
     if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
     else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
-    else fprintf(fc, "%%s");
+    else fprintf(fc, "'%%s'");
 
     fprintf(fc, "\", %s);\n", m->fields[0].name);
 

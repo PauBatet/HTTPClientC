@@ -108,7 +108,7 @@ void HTTPServer_send_response(HTTPRequest *request, const char *body, const char
 	snprintf(response_header, sizeof(response_header),
 			"HTTP/1.1 %d %s\r\n"
 			"Content-Type: %s\r\n"
-			"Content-Length %d\r\n"
+			"Content-Length: %d\r\n"
 			"\r\n",
 			final_status_code, final_status_message, final_content_type, content_length);
 	write(request->client_socket, response_header, strlen(response_header));
