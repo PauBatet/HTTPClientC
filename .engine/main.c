@@ -109,13 +109,25 @@ void destroy_queue(RequestQueue *q) {
 // Handle a single request
 void handle_request(HTTPRequest *request) {
     printf("Processing request: %s %s\n", request->method, request->path);
+
     for (int i = 0; routes[i].path != NULL; i++) {
         if (route_match(routes[i].path, request->path, request)) {
+            // ---- Print query params ----
             if (request->param_count > 0) {
-                for (size_t i = 0; i < request->param_count; i++) {
+                printf("Query params:\n");
+                for (size_t j = 0; j < request->param_count; j++) {
                     printf("  %s = %s\n",
-                        request->params[i].key ? request->params[i].key : "(null)",
-                        request->params[i].value ? request->params[i].value : "(null)");
+                        request->params[j].key   ? request->params[j].key   : "(null)",
+                        request->params[j].value ? request->params[j].value : "(null)");
+                }
+            }
+            // ---- Print headers ----
+            if (request->header_count > 0) {
+                printf("Headers:\n");
+                for (size_t j = 0; j < request->header_count; j++) {
+                    printf("  %s: %s\n",
+                        request->header_list[j].key   ? request->header_list[j].key   : "(null)",
+                        request->header_list[j].value ? request->header_list[j].value : "(null)");
                 }
             }
             routes[i].handler(request);

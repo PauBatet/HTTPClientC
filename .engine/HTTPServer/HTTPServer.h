@@ -9,6 +9,11 @@ typedef struct {
 } HTTPParam;
 
 typedef struct {
+    char *key;
+    char *value;
+} HTTPHeader;
+
+typedef struct {
     char method[8];
     char version[16];
 
@@ -22,6 +27,10 @@ typedef struct {
     HTTPParam *params;
     size_t param_count;
     size_t param_capacity;
+
+    HTTPHeader *header_list;
+    size_t header_count;
+    size_t header_capacity;
 
     int client_socket;
 } HTTPRequest;
@@ -43,5 +52,11 @@ void HTTPServer_destroy(HTTPServer *server);
 void HTTPRequest_free(HTTPRequest *req);
 
 bool HTTPRequest_add_param(HTTPRequest *req, const char *key, const char *value);
+
+const char *HTTPRequest_get_param(HTTPRequest *req, const char *key);
+
+bool HTTPRequest_add_header(HTTPRequest *req, const char *key, const char *value);
+
+const char *HTTPRequest_get_header(HTTPRequest *req, const char *key);
 
 #endif
