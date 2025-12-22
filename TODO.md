@@ -1,8 +1,11 @@
 ## TODO
 
 
-# Test DB things and improve them
-# Implement a module to make http requests
+# Test DB things
+# Study viability of abstracting DB to pseudo strategy pattern
+# Make Dockerfile
+# Make template generator
+# Create first release
 
 # HTML Templating, add nested HTML/React style components
 # Make templates
