@@ -1,7 +1,7 @@
 # Project structure
 SRC_DIR = ./
-CACHE_DIR = $(SRC_DIR)/.cache
-ENGINE_DIR = $(SRC_DIR)/.engine
+CACHE_DIR = $(SRC_DIR).cache
+ENGINE_DIR = $(SRC_DIR).engine
 HTTP_SERVER_DIR = $(ENGINE_DIR)/HTTPServer
 HTML_TEMPLATING_DIR = $(ENGINE_DIR)/HTMLTemplating
 DATABASE_DIR = $(ENGINE_DIR)/Database
@@ -9,6 +9,8 @@ ROUTING_DIR = $(ENGINE_DIR)/Routing
 BUILD_DIR = $(CACHE_DIR)/build
 MODEL_SRCS := $(wildcard $(CACHE_DIR)/models/*.c)
 MODEL_OBJS := $(patsubst $(CACHE_DIR)/models/%.c,$(BUILD_DIR)/models_%.o,$(MODEL_SRCS))
+
+$(shell mkdir -p $(CACHE_DIR) $(BUILD_DIR))
 
 # Compiler and flags
 CC = gcc
@@ -61,6 +63,9 @@ $(BUILD_DIR)/main.o: $(ENGINE_DIR)/main.c | $(BUILD_DIR)
 $(BUILD_DIR)/config.o: $(SRC_DIR)/config.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/models.o: $(SRC_DIR)/models.c | $(BUILD_DIR)
+		$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/HTMLTemplating.o: $(HTML_TEMPLATING_DIR)/HTMLTemplating.c | $(BUILD_DIR)
 		$(CC) $(CFLAGS) -c $< -o $@
 
@@ -94,15 +99,39 @@ full_clean:
 		rm -f GeneratedModels.h
 
 run: $(TARGET)
+		@test -f GeneratedModels.h || (echo "❌ Run 'make migrate' first"; exit 1)
 		mkdir -p $(BUILD_DIR)
 		./$(TARGET)
 
-migrate:
-	mkdir -p .cache/models
-	$(CC) $(CFLAGS) -o .cache/models/migrate \
-		.engine/Models/Models.c \
-		.engine/Database/Database.c \
-		.engine/Database/sqlite3.c
-	./.cache/models/migrate
+# Generate model paths from config.c
+$(CACHE_DIR)/model_paths: $(SRC_DIR)/config.c
+	@TMP_MAIN=$(SRC_DIR)/main_tmp.c; \
+	echo '#include "config.c"' > $$TMP_MAIN; \
+	echo '#include <stdio.h>' >> $$TMP_MAIN; \
+	echo 'int main() { int i=0; while(MODEL_PATHS[i]) printf("%s\n", MODEL_PATHS[i++]); return 0; }' >> $$TMP_MAIN; \
+	$(CC) $(CFLAGS) $$TMP_MAIN -o $(CACHE_DIR)/gen_paths; \
+	./$(CACHE_DIR)/gen_paths > $(CACHE_DIR)/model_paths; \
+	rm -f $$TMP_MAIN $(CACHE_DIR)/gen_paths
+
+# Deferred expansion: read model paths at execution time
+MODEL_DECL_SRCS = $(shell [ -f $(CACHE_DIR)/model_paths ] && xargs -a $(CACHE_DIR)/model_paths -I {} find {} -name '*.c' || echo "")
+
+# Model object files
+MODEL_OBJS = $(patsubst $(CACHE_DIR)/models/%.c,$(BUILD_DIR)/models_%.o,$(wildcard $(CACHE_DIR)/models/*.c))
+
+# Rule to compile generated model objects
+$(BUILD_DIR)/models_%.o: $(CACHE_DIR)/models/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Migrate target: generates CRUD model code
+migrate: $(CACHE_DIR)/model_paths
+	@mkdir -p $(CACHE_DIR)/models
+	@MODEL_SRCS=$$(xargs -a $(CACHE_DIR)/model_paths -I {} find {} -name '*.c'); \
+	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/migrate \
+		$(ENGINE_DIR)/Models/Models.c \
+		$(ENGINE_DIR)/Database/Database.c \
+		$(ENGINE_DIR)/Database/sqlite3.c \
+		$$MODEL_SRCS; \
+	./$(CACHE_DIR)/models/migrate
 
 .PHONY: all clean run

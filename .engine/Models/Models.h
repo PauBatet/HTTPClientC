@@ -36,11 +36,6 @@ typedef struct Model {
     ForeignKey *foreign_keys;
     int num_foreign_keys;
 
-    HookFunc on_create;
-    HookFunc on_read;
-    HookFunc on_update;
-    HookFunc on_delete;
-
     struct Model *next;
 } Model;
 
@@ -54,13 +49,13 @@ void model(
     Field *fields,
     int num_fields,
     ForeignKey *foreign_keys,
-    int num_foreign_keys,
-    HookFunc on_create,
-    HookFunc on_read,
-    HookFunc on_update,
-    HookFunc on_delete
+    int num_foreign_keys
 );
 
 // Function to generate tables for all registered models
 void generate_model_tables(Database *db);
 
+typedef void (*ModelDefFn)(void);
+
+void register_model_def(ModelDefFn fn);
+void run_model_definitions(void);
