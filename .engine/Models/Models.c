@@ -1,5 +1,4 @@
 #include "Models.h"
-#include "../../models.c"
 #include "../Database/Database.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -420,11 +419,7 @@ void model(
     Field *fields,
     int num_fields,
     ForeignKey *foreign_keys,
-    int num_foreign_keys,
-    HookFunc on_create,
-    HookFunc on_read,
-    HookFunc on_update,
-    HookFunc on_delete
+    int num_foreign_keys
 ) {
     Model *m = calloc(1, sizeof(Model));
     if (!m) { perror("malloc"); exit(1); }
@@ -461,11 +456,6 @@ void model(
     } else {
         m->foreign_keys = NULL;
     }
-
-    m->on_create = on_create;
-    m->on_read   = on_read;
-    m->on_update = on_update;
-    m->on_delete = on_delete;
 
     m->next = model_registry;
     model_registry = m;
@@ -537,6 +527,20 @@ void generate_model_tables(Database *db) {
     }
 }
 
+static ModelDefFn *defs = NULL;
+static size_t def_count = 0;
+
+void register_model_def(ModelDefFn fn) {
+    defs = realloc(defs, sizeof(ModelDefFn) * (def_count + 1));
+    defs[def_count++] = fn;
+}
+
+void run_model_definitions(void) {
+    for (size_t i = 0; i < def_count; i++) {
+        defs[i]();
+    }
+}
+
 int main() {
     Database *db;
     if (!db_open(&db, "app.db")) {
@@ -544,7 +548,7 @@ int main() {
         return 1;
     }
 
-    define_models();
+    run_model_definitions();
     generate_model_tables(db);
 
     db_close(db);
