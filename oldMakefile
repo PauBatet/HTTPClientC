@@ -1,29 +1,29 @@
 ## Paths
-SRC_DIR              := ./
-CACHE_DIR            := $(SRC_DIR).cache
-ENGINE_DIR           := $(SRC_DIR).engine
-HTTP_SERVER_DIR      := $(ENGINE_DIR)/HTTPServer
-HTML_TEMPLATING_DIR  := $(ENGINE_DIR)/HTMLTemplating
-DATABASE_DIR         := $(ENGINE_DIR)/Database
-ROUTING_DIR          := $(ENGINE_DIR)/Routing
-BUILD_DIR            := $(CACHE_DIR)/build
+SRC_DIR := ./
+CACHE_DIR := $(SRC_DIR).cache
+ENGINE_DIR := $(SRC_DIR).engine
+HTTP_SERVER_DIR := $(ENGINE_DIR)/HTTPServer
+HTML_TEMPLATING_DIR := $(ENGINE_DIR)/HTMLTemplating
+DATABASE_DIR := $(ENGINE_DIR)/Database
+ROUTING_DIR := $(ENGINE_DIR)/Routing
+BUILD_DIR := $(CACHE_DIR)/build
 
 # Ensure dirs exist (best-effort at parse-time)
 $(shell mkdir -p $(CACHE_DIR) $(BUILD_DIR))
 
 # Compiler
-CC     := gcc
+CC := gcc
 CFLAGS := -Wall -Wextra -g -Wa,--noexecstack \
-          -I$(SRC_DIR) -I$(CACHE_DIR) -I$(ENGINE_DIR) \
-          -I$(HTML_TEMPLATING_DIR) -I$(HTTP_SERVER_DIR) -I$(DATABASE_DIR) -I$(ROUTING_DIR)
+	-I$(SRC_DIR) -I$(CACHE_DIR) -I$(ENGINE_DIR) \
+	-I$(HTML_TEMPLATING_DIR) -I$(HTTP_SERVER_DIR) -I$(DATABASE_DIR) -I$(ROUTING_DIR)
 
 # Server sources (core sources compiled at link-time)
 SRCS := $(ENGINE_DIR)/main.c \
-        $(SRC_DIR)/config.c \
-        $(HTML_TEMPLATING_DIR)/HTMLTemplating.c \
-        $(HTTP_SERVER_DIR)/HTTPServer.c \
-        $(ROUTING_DIR)/Routing.c \
-        $(SRC_DIR)/routes.c
+	$(SRC_DIR)/config.c \
+	$(HTML_TEMPLATING_DIR)/HTMLTemplating.c \
+	$(HTTP_SERVER_DIR)/HTTPServer.c \
+	$(ROUTING_DIR)/Routing.c \
+	$(SRC_DIR)/routes.c
 
 TARGET := $(BUILD_DIR)/server
 
@@ -33,8 +33,10 @@ all: $(TARGET)
 
 # ------------------------------------------------------------
 # Utility targets: create cache files from config.c
-# - .cache/model_paths => lines with directories (from MODEL_PATHS[] in config.c)
-# - .cache/db_backend => single word: sqlite or postgres (from DB_BACKEND in config.c)
+#  - .cache/model_paths  => lines with directories (from MODEL_PATHS[] in config.c)
+#  - .cache/db_backend   => single word: sqlite or postgres (from DB_BACKEND in config.c)
+# Both are produced by compiling tiny helpers that include config.c
+# This avoids fragile grep/parsing.
 # ------------------------------------------------------------
 
 $(CACHE_DIR)/model_paths: $(SRC_DIR)/config.c | $(CACHE_DIR)
@@ -57,14 +59,16 @@ $(CACHE_DIR)/db_backend: $(SRC_DIR)/config.c | $(CACHE_DIR)
 	$(CC) $(CFLAGS) $$TMP -o $(CACHE_DIR)/gen_db_backend; \
 	./$(CACHE_DIR)/gen_db_backend > $(CACHE_DIR)/db_backend || true; \
 	rm -f $$TMP $(CACHE_DIR)/gen_db_backend; \
-	echo "-> $(CACHE_DIR)/db_backend contains: $$(cat $(CACHE_DIR)/db_backend 2>/dev/null)"
+	echo "-> $(CACHE_DIR)/db_backend contains:`cat $(CACHE_DIR)/db_backend 2>/dev/null`"
 
 # Ensure cache dir target
 $(CACHE_DIR):
 	mkdir -p $(CACHE_DIR)
 
 # ------------------------------------------------------------
-# Migrate: compile engine Models.c + user model .c files
+# Migrate: compile engine Models.c + user model .c files (from model_paths)
+# and run the migration program which should generate .cache/models/*.c and GeneratedModels.h
+# We compute all dynamic lists inside the recipe to avoid parse-time errors.
 # ------------------------------------------------------------
 
 migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
@@ -73,24 +77,27 @@ migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
 	@DB_BACKEND=$$(cat $(CACHE_DIR)/db_backend 2>/dev/null || echo ""); \
 	[ -n "$$DB_BACKEND" ] || (echo "ERROR: db backend not set; run 'make $(CACHE_DIR)/db_backend' or check config.c"; exit 1); \
 	MODEL_SRCS=$$(xargs -a $(CACHE_DIR)/model_paths -I {} find {} -maxdepth 1 -type f -name '*.c' 2>/dev/null || true); \
-	echo " DB backend: $$DB_BACKEND"; \
-	echo " Model sources: $$MODEL_SRCS"; \
+	echo "  DB backend: $$DB_BACKEND"; \
+	echo "  Model sources: $$MODEL_SRCS"; \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
-		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
-		DB_LIBS=""; \
+	    DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
+	    DB_LIBS=""; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
-		DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
-		DB_LIBS="-lpq"; \
+	    DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
+	    DB_LIBS="-lpq"; \
 	else \
-		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
+	    echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/migrate \
-		$(ENGINE_DIR)/Models/Models.c $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS || exit 1; \
+	    $(ENGINE_DIR)/Models/Models.c $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS || exit 1; \
 	./$(CACHE_DIR)/models/migrate || (echo "Migration binary failed"; exit 1); \
 	echo "Migration finished."
 
 # ------------------------------------------------------------
-# Build/run server
+# Build/run server:
+#  - compile generated model .c into .cache/build/models_*.o (we do this inside recipe)
+#  - build server linking core SRCS (as .c inputs) plus model .o and backend libs
+#  - NOTE: run will fail early if GeneratedModels.h missing — you must run migrate first.
 # ------------------------------------------------------------
 
 $(TARGET):
@@ -99,23 +106,22 @@ $(TARGET):
 	@DB_BACKEND=$$(cat $(CACHE_DIR)/db_backend 2>/dev/null || echo ""); \
 	[ -n "$$DB_BACKEND" ] || (echo "ERROR: db backend not set; run 'make $(CACHE_DIR)/db_backend' or check config.c"; exit 1); \
 	MODEL_C=$$(ls -1 $(CACHE_DIR)/models/*.c 2>/dev/null || true); \
-	[ -f $(SRC_DIR)/models.c ] && MODEL_C="$(SRC_DIR)/models.c $$MODEL_C"; \
+	[ -f $(SRC_DIR)/models.c ] && MODEL_C="$(SRC_DIR)/models.c $$MODEL_C"
 	OBJS=""; \
 	for f in $$MODEL_C; do \
-		base=$$(basename $$f .c); \
-		OBJ=$(BUILD_DIR)/models_$$base.o; \
-		echo " compiling model $$f -> $$OBJ"; \
-		$(CC) $(CFLAGS) -c $$f -o $$OBJ || exit 1; \
-		OBJS="$$OBJS $$OBJ"; \
+	  base=$$(basename $$f .c); \
+	  OBJ=$(BUILD_DIR)/models_$$base.o; \
+	  echo "  compiling model $$f -> $$OBJ"; \
+	  $(CC) $(CFLAGS) -c $$f -o $$OBJ || exit 1; \
+	  OBJS="$$OBJS $$OBJ"; \
 	done; \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
-		RUNTIME_DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
-		DB_LIBS=""; \
+	  DB_SRC=""; DB_LIBS=""; \
+	  RUNTIME_DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
-		RUNTIME_DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
-		DB_LIBS="-lpq"; \
+	  RUNTIME_DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; DB_LIBS="-lpq"; \
 	else \
-		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
+	  echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	echo "Linking server with DB backend $$DB_BACKEND ..."; \
 	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $$RUNTIME_DB_SRC $$OBJS $$DB_LIBS || { echo "Link failed"; exit 1; }; \
@@ -129,11 +135,11 @@ run: $(TARGET)
 # ------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------
-
 clean:
 	rm -rf $(BUILD_DIR)
 
 full_clean:
 	rm -rf $(CACHE_DIR)
 	rm -f GeneratedModels.h
+
 

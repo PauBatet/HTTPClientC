@@ -1,10 +1,9 @@
-#include "Models.h"
+#include "../Models.h"
 #include "../Database/Database.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <ctype.h>
 
 Model *model_registry = NULL;
 
@@ -35,11 +34,7 @@ static void generate_crud_files(Model *m) {
 
     FILE *fh = fopen(path_h, "w");
     FILE *fc = fopen(path_c, "w");
-    if (!fh || !fc) {
-        if (fh) fclose(fh);
-        if (fc) fclose(fc);
-        return;
-    }
+    if (!fh || !fc) return;
 
     append_to_generated_models_header(m->name);
 
@@ -86,17 +81,17 @@ static void generate_crud_files(Model *m) {
         "bool %s_query(Database *db, const char *where, %sList *out);\n\n"
         "void %s_free(%s *obj);\n"
         "void %sList_free(%sList *list);\n",
-        m->name, m->name,                         // create
-        m->name, m->name,                         // create_many
-        m->name, pk_ctype, m->fields[0].name, m->name, // read (4 args)
-        m->name, m->name,                         // update
-        m->name, m->name,                         // update_many
-        m->name, pk_ctype, m->fields[0].name,      // delete (3 args)
-        m->name, m->name,                         // delete_many
-        m->name, m->name,                         // read_all
-        m->name, m->name,                         // query
-        m->name, m->name,                         // free
-        m->name, m->name                          // List_free (This was likely the missing one)
+        m->name, m->name,
+        m->name, m->name,
+        m->name, pk_ctype, m->fields[0].name, m->name,
+        m->name, m->name,
+        m->name, m->name,
+        m->name, pk_ctype, m->fields[0].name,
+        m->name, m->name,
+        m->name, m->name,
+        m->name, m->name,
+        m->name, m->name,
+        m->name, m->name
     );
 
     fclose(fh);
@@ -132,10 +127,10 @@ static void generate_crud_files(Model *m) {
         if (i < m->num_fields - 1) fprintf(fc, ", ");
     }
 
-    fprintf(fc, ")\", ");
+    fprintf(fc, ")\"");
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "obj->%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, ", obj->%s", m->fields[i].name);
     }
 
     fprintf(fc, ");\n    return db_exec(db, sql);\n}\n\n");
@@ -332,7 +327,7 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    // UPDATE (still uses db_exec simplifying update pattern; you can later switch to prepared statements)
+    // UPDATE
     fprintf(fc,
         "bool %s_update(Database *db, %s *obj) {\n"
         "    char sql[1024];\n"
@@ -361,7 +356,7 @@ static void generate_crud_files(Model *m) {
     fprintf(fc, ", obj->%s);\n", m->fields[0].name);
     fprintf(fc, "    return db_exec(db, sql);\n}\n\n");
 
-    // UPDATE MANY
+    //UPDETE MANY
     fprintf(fc,
         "bool %s_update_many(Database *db, %sList *list) {\n"
         "    if (!db_exec(db, \"BEGIN\")) return false;\n"
@@ -391,7 +386,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc, "    return db_exec(db, sql);\n}\n");
 
-    // DELETE MANY
+    //DELETE MANY
     fprintf(fc,
         "bool %s_delete_many(Database *db, %sList *list) {\n"
         "    if (!db_exec(db, \"BEGIN\")) return false;\n"
@@ -415,7 +410,7 @@ static void generate_crud_files(Model *m) {
 // Add a model to the registry
 void model(
     const char *name,
-    Field *primary_key,
+    Field *primary_key,       // NEW parameter
     Field *fields,
     int num_fields,
     ForeignKey *foreign_keys,
@@ -463,12 +458,11 @@ void model(
     generate_crud_files(m);
 }
 
-// Generate tables in the DB (Postgres-specific SQL generation)
+// Generate tables in the DB
 void generate_model_tables(Database *db) {
     Model *m = model_registry;
     while (m) {
-        char sql[8192] = {0};
-
+        char sql[4096] = {0};
         strcat(sql, "CREATE TABLE IF NOT EXISTS ");
         strcat(sql, "\"");
         strcat(sql, m->name);
@@ -477,7 +471,7 @@ void generate_model_tables(Database *db) {
         strcat(sql, " (");
 
         for (int i = 0; i < m->num_fields; i++) {
-            char buffer[512];
+            char buffer[256];
             const char *type_str = "TEXT";
             switch (m->fields[i].type) {
                 case TYPE_INT: type_str = "INTEGER"; break;
@@ -487,15 +481,15 @@ void generate_model_tables(Database *db) {
             }
 
             if (i == 0) {
-                // AUTO-INCREMENT for Postgres: use SERIAL
-                if (strcmp(m->fields[i].name, "id") == 0 && m->fields[i].type == TYPE_INT) {
-                    snprintf(buffer, sizeof(buffer), "%s SERIAL PRIMARY KEY%s",
-                             m->fields[i].name,
-                             m->num_fields - 1 > 0 || m->num_foreign_keys > 0 ? ", " : "");
+                // AUTO-INCREMENT only if it's the auto-generated "id"
+                if (strcmp(m->fields[i].name, "id") == 0) {
+                    snprintf(buffer, sizeof(buffer), "%s %s PRIMARY KEY AUTOINCREMENT%s",
+                            m->fields[i].name, type_str,
+                            m->num_fields - 1 > 0 || m->num_foreign_keys > 0 ? ", " : "");
                 } else {
                     snprintf(buffer, sizeof(buffer), "%s %s PRIMARY KEY%s",
-                             m->fields[i].name, type_str,
-                             m->num_fields - 1 > 0 || m->num_foreign_keys > 0 ? ", " : "");
+                            m->fields[i].name, type_str,
+                            m->num_fields - 1 > 0 || m->num_foreign_keys > 0 ? ", " : "");
                 }
             } else {
                 snprintf(buffer, sizeof(buffer), "%s %s%s",
@@ -507,7 +501,7 @@ void generate_model_tables(Database *db) {
         }
 
         for (int i = 0; i < m->num_foreign_keys; i++) {
-            char buffer[512];
+            char buffer[256];
             snprintf(buffer, sizeof(buffer), "FOREIGN KEY(%s) REFERENCES \"%s\"(%s)%s",
                      m->foreign_keys[i].field_name,
                      m->foreign_keys[i].ref_table,
