@@ -44,6 +44,24 @@ void db_close(Database *db) {
     free(db);
 }
 
+bool db_init(Database *db) {
+    /* PostgreSQL equivalent */
+    if (!db_exec(db,
+        "CREATE TABLE IF NOT EXISTS visits ("
+        "id INTEGER PRIMARY KEY, "
+        "count INTEGER DEFAULT 0"
+        ");"
+    )) {
+        return false;
+    }
+
+    return db_exec(db,
+        "INSERT INTO visits (id, count) "
+        "VALUES (1, 0) "
+        "ON CONFLICT (id) DO NOTHING;"
+    );
+}
+
 /* -------------------- Simple exec -------------------- */
 
 bool db_exec(Database *db, const char *sql)

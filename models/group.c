@@ -8,6 +8,22 @@ void register_group_model(void) {
     };
 
     model("Group", NULL, group_fields, 2, NULL, 0);
+
+    Field user_fields[] = {
+        {"name", TYPE_STRING},
+        {"age", TYPE_INT},
+        {"email", TYPE_STRING},
+        {"group_id", TYPE_INT}
+    };
+
+    ForeignKey user_fk[] = {
+        {"group_id", "Group", "id"}
+    };
+
+    Field pk_field = { "DNI", TYPE_STRING };
+
+    model("User", &pk_field, user_fields, 4, user_fk, 1);
+
 }
 
 __attribute__((constructor))
