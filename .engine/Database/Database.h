@@ -7,6 +7,7 @@ typedef struct DBResult DBResult;
 extern Database *db;
 
 /* Lifecycle */
+bool db_init(Database *db);
 bool db_open(Database **db);
 void db_close(Database *db);
 

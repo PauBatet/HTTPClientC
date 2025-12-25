@@ -170,16 +170,6 @@ void init_db() {
         printf("Failed to open database\n");
         return;
     }
-
-    db_exec(db,
-        "CREATE TABLE IF NOT EXISTS visits ("
-        "id INTEGER PRIMARY KEY, "
-        "count INTEGER DEFAULT 0"
-        ");"
-
-        "INSERT OR IGNORE INTO visits (id, count)"
-        "VALUES (1, 0);"
-    );
     return;
 }
 

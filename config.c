@@ -12,10 +12,10 @@ const char *MODEL_PATHS[] = {
 const int NUM_MODEL_DIRS = 1;
 
 // DB backend
-const char *DB_BACKEND = DB_SQLITE;
+const char *DB_BACKEND = DB_POSTGRES;
 
 // PostgreSQL connection info
-const char *PG_HOST     = "localhost";
+const char *PG_HOST     = "127.0.0.1";
 const int   PG_PORT     = 5432;
 const char *PG_DBNAME   = "appdb";
 const char *PG_USER     = "appuser";

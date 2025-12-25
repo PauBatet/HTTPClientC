@@ -14,18 +14,18 @@ static void append_to_generated_models_header(const char *model_name) {
     FILE *f = fopen(path, "a+");
     if (!f) return;
 
+    // Write header guard only once
     fseek(f, 0, SEEK_END);
     if (ftell(f) == 0) {
         fprintf(f, "#pragma once\n\n");
     }
 
     fprintf(f, "#include \".cache/models/%s.h\"\n", model_name);
+
     fclose(f);
 }
 
-/* -------------------------------------------------- */
-/* CRUD generation                                    */
-/* -------------------------------------------------- */
+// Generate CRUD C and H files
 static void generate_crud_files(Model *m) {
     char path_h[512], path_c[512];
     mkdir(".cache/models", 0755);
@@ -43,7 +43,7 @@ static void generate_crud_files(Model *m) {
 
     append_to_generated_models_header(m->name);
 
-    /* ---------------- H FILE ---------------- */
+    // --- H file ---
     fprintf(fh,
         "#pragma once\n"
         "#include \"../../.engine/Database/Database.h\"\n"
@@ -64,9 +64,12 @@ static void generate_crud_files(Model *m) {
         "    %s *items;\n"
         "    size_t count;\n"
         "} %sList;\n\n",
-        m->name, m->name, m->name
+        m->name,
+        m->name,
+        m->name
     );
 
+    // Determine primary key C type for function prototypes
     const char *pk_ctype = "char*";
     if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) pk_ctype = "int";
     else if (m->fields[0].type == TYPE_FLOAT) pk_ctype = "float";
@@ -83,21 +86,22 @@ static void generate_crud_files(Model *m) {
         "bool %s_query(Database *db, const char *where, %sList *out);\n\n"
         "void %s_free(%s *obj);\n"
         "void %sList_free(%sList *list);\n",
-        m->name, m->name,                    // create
-        m->name, m->name,                    // create_many
-        m->name, pk_ctype, m->fields[0].name, m->name, // read
-        m->name, m->name,                    // update
-        m->name, m->name,                    // update_many
-        m->name, pk_ctype, m->fields[0].name,// delete
-        m->name, m->name,                    // delete_many
-        m->name, m->name,                    // read_all
-        m->name, m->name,                    // query
-        m->name, m->name,                     // free
-        m->name, m->name                     // List_free
+        m->name, m->name,                         // create
+        m->name, m->name,                         // create_many
+        m->name, pk_ctype, m->fields[0].name, m->name, // read (4 args)
+        m->name, m->name,                         // update
+        m->name, m->name,                         // update_many
+        m->name, pk_ctype, m->fields[0].name,      // delete (3 args)
+        m->name, m->name,                         // delete_many
+        m->name, m->name,                         // read_all
+        m->name, m->name,                         // query
+        m->name, m->name,                         // free
+        m->name, m->name                          // List_free (This was likely the missing one)
     );
+
     fclose(fh);
 
-    /* ---------------- C FILE ---------------- */
+    // --- C file ---
     fprintf(fc,
         "#include \"%s\"\n"
         "#include <stdio.h>\n"
@@ -107,7 +111,7 @@ static void generate_crud_files(Model *m) {
         path_h
     );
 
-    /* CREATE */
+    // CREATE
     fprintf(fc,
         "bool %s_create(Database *db, %s *obj) {\n"
         "    char sql[1024];\n"
@@ -116,14 +120,13 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc, ") VALUES (");
 
     for (int i = 0; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_BOOL) fprintf(fc, "%%s");
-        else if (m->fields[i].type == TYPE_INT) fprintf(fc, "%%d");
+        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL) fprintf(fc, "%%d");
         else if (m->fields[i].type == TYPE_FLOAT) fprintf(fc, "%%f");
         else fprintf(fc, "'%%s'");
         if (i < m->num_fields - 1) fprintf(fc, ", ");
@@ -132,12 +135,7 @@ static void generate_crud_files(Model *m) {
     fprintf(fc, ")\", ");
 
     for (int i = 0; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "obj->%s ? \"true\" : \"false\"", m->fields[i].name);
-        else
-            fprintf(fc, "obj->%s", m->fields[i].name);
-
-        if (i < m->num_fields - 1) fprintf(fc, ", ");
+        fprintf(fc, "obj->%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc, ");\n    return db_exec(db, sql);\n}\n\n");
@@ -169,47 +167,30 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name,
-                i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
-    fprintf(fc,
-        " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ",
-        m->name, m->fields[0].name
-    );
+    fprintf(fc, " FROM \\\"%s\\\" WHERE %s = ", m->name, m->fields[0].name);
 
-    if (m->fields[0].type == TYPE_BOOL)
-        fprintf(fc, "%%s");
-    else if (m->fields[0].type == TYPE_INT)
-        fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT)
-        fprintf(fc, "%%f");
-    else
-        fprintf(fc, "'%%s'");
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
+    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
+    else fprintf(fc, "'%%s'");
+
+    fprintf(fc, "\", %s);\n", m->fields[0].name);
 
     fprintf(fc,
-        "\", %s);\n",
-        m->fields[0].type == TYPE_BOOL
-            ? "(%s ? \"true\" : \"false\")"
-            : m->fields[0].name
-    );
-
-    fprintf(fc,
-        "    if (!db_query(db, sql, &r)) return false;\n"
-        "    bool ok = false;\n"
-        "    if (db_result_next(r)) {\n"
+        "if (!db_query(db, sql, &r)) return false;\n"
+        "bool ok = false;\n"
+        "if (db_result_next(r)) {\n"
     );
 
     for (int i = 0; i < m->num_fields; i++) {
         if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
         else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
         else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
     }
 
     fprintf(fc,
@@ -220,7 +201,7 @@ static void generate_crud_files(Model *m) {
         "}\n\n"
     );
 
-    // READ ALL
+    // READ_ALL
     fprintf(fc,
         "bool %s_read_all(Database *db, %sList *out) {\n"
         "    DBResult *r;\n"
@@ -229,9 +210,7 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s",
-                m->fields[i].name,
-                i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc,
@@ -260,14 +239,11 @@ static void generate_crud_files(Model *m) {
 
     for (int i = 0; i < m->num_fields; i++) {
         if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
         else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
         else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
     }
 
     fprintf(fc,
@@ -287,9 +263,7 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s",
-                m->fields[i].name,
-                i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc,
@@ -318,14 +292,11 @@ static void generate_crud_files(Model *m) {
 
     for (int i = 0; i < m->num_fields; i++) {
         if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
         else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
         else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n",
-                    m->fields[i].name, i);
+            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
     }
 
     fprintf(fc,
@@ -361,7 +332,7 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    // UPDATE
+    // UPDATE (still uses db_exec simplifying update pattern; you can later switch to prepared statements)
     fprintf(fc,
         "bool %s_update(Database *db, %s *obj) {\n"
         "    char sql[1024];\n"
@@ -369,52 +340,26 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    for (int i = 1; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"=", m->fields[i].name);
-
-        if (m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "%%s");
-        else if (m->fields[i].type == TYPE_INT)
-            fprintf(fc, "%%d");
-        else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "%%f");
-        else
-            fprintf(fc, "'%%s'");
-
+    for (int i = 0; i < m->num_fields; i++) {
+        if (i == 0) continue;
+        fprintf(fc, "%s=", m->fields[i].name);
+        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL) fprintf(fc, "%%d");
+        else if (m->fields[i].type == TYPE_FLOAT) fprintf(fc, "%%f");
+        else fprintf(fc, "'%%s'");
         if (i < m->num_fields - 1) fprintf(fc, ", ");
     }
 
-    fprintf(fc,
-        " WHERE \\\"%s\\\" = ",
-        m->fields[0].name
-    );
-
-    if (m->fields[0].type == TYPE_BOOL)
-        fprintf(fc, "%%s");
-    else if (m->fields[0].type == TYPE_INT)
-        fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT)
-        fprintf(fc, "%%f");
-    else
-        fprintf(fc, "'%%s'");
-
+    fprintf(fc, " WHERE %s = ", m->fields[0].name);
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
+    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
+    else fprintf(fc, "'%%s'");
     fprintf(fc, "\", ");
-
     for (int i = 1; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "(obj->%s ? \"true\" : \"false\")", m->fields[i].name);
-        else
-            fprintf(fc, "obj->%s", m->fields[i].name);
-
+        fprintf(fc, "obj->%s", m->fields[i].name);
         if (i < m->num_fields - 1) fprintf(fc, ", ");
     }
-
-    fprintf(fc,
-        ", obj->%s);\n"
-        "    return db_exec(db, sql);\n"
-        "}\n\n",
-        m->fields[0].name
-    );
+    fprintf(fc, ", obj->%s);\n", m->fields[0].name);
+    fprintf(fc, "    return db_exec(db, sql);\n}\n\n");
 
     // UPDATE MANY
     fprintf(fc,
@@ -435,26 +380,16 @@ static void generate_crud_files(Model *m) {
     fprintf(fc,
         "bool %s_delete(Database *db, %s %s) {\n"
         "    char sql[256];\n"
-        "    snprintf(sql, sizeof(sql), \"DELETE FROM \\\"%s\\\" WHERE \\\"%s\\\" = ",
-        m->name, pk_ctype, m->fields[0].name,
-        m->name, m->fields[0].name
+        "    snprintf(sql, sizeof(sql), \"DELETE FROM \\\"%s\\\" WHERE %s = ",
+        m->name, pk_ctype, m->fields[0].name, m->name, m->fields[0].name
     );
 
-    if (m->fields[0].type == TYPE_BOOL)
-        fprintf(fc, "%%s");
-    else if (m->fields[0].type == TYPE_INT)
-        fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT)
-        fprintf(fc, "%%f");
-    else
-        fprintf(fc, "'%%s'");
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
+    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
+    else fprintf(fc, "'%%s'");
+    fprintf(fc, "\", %s);\n", m->fields[0].name);
 
-    fprintf(fc,
-        "\", %s);\n"
-        "    return db_exec(db, sql);\n"
-        "}\n",
-        m->fields[0].name
-    );
+    fprintf(fc, "    return db_exec(db, sql);\n}\n");
 
     // DELETE MANY
     fprintf(fc,
@@ -477,70 +412,118 @@ static void generate_crud_files(Model *m) {
     fclose(fc);
 }
 
-/* -------------------------------------------------- */
-/* Model registration & schema generation             */
-/* -------------------------------------------------- */
+// Add a model to the registry
+void model(
+    const char *name,
+    Field *primary_key,
+    Field *fields,
+    int num_fields,
+    ForeignKey *foreign_keys,
+    int num_foreign_keys
+) {
+    Model *m = calloc(1, sizeof(Model));
+    if (!m) { perror("malloc"); exit(1); }
 
+    m->name = strdup(name);
+
+    int auto_id = (primary_key == NULL);
+    m->num_fields = num_fields + 1;
+    m->fields = malloc(sizeof(Field) * m->num_fields);
+
+
+    if (auto_id) {
+        m->fields[0].type = TYPE_INT;
+        m->fields[0].name = strdup("id");
+    } else {
+        m->fields[0].type = primary_key->type;
+        m->fields[0].name = strdup(primary_key->name);
+    }
+
+    for (int i = 0; i < num_fields; i++) {
+        m->fields[i + 1].type = fields[i].type;
+        m->fields[i + 1].name = strdup(fields[i].name);
+    }
+
+    // Foreign keys
+    m->num_foreign_keys = num_foreign_keys;
+    if (num_foreign_keys > 0 && foreign_keys) {
+        m->foreign_keys = malloc(sizeof(ForeignKey) * num_foreign_keys);
+        for (int i = 0; i < num_foreign_keys; i++) {
+            m->foreign_keys[i].field_name = strdup(foreign_keys[i].field_name);
+            m->foreign_keys[i].ref_table  = strdup(foreign_keys[i].ref_table);
+            m->foreign_keys[i].ref_field  = strdup(foreign_keys[i].ref_field);
+        }
+    } else {
+        m->foreign_keys = NULL;
+    }
+
+    m->next = model_registry;
+    model_registry = m;
+
+    generate_crud_files(m);
+}
+
+// Generate tables in the DB (Postgres-specific SQL generation)
 void generate_model_tables(Database *db) {
     Model *m = model_registry;
     while (m) {
         char sql[8192] = {0};
 
-        strcat(sql, "CREATE TABLE IF NOT EXISTS \"");
+        strcat(sql, "CREATE TABLE IF NOT EXISTS ");
+        strcat(sql, "\"");
         strcat(sql, m->name);
-        strcat(sql, "\" (");
+        strcat(sql, "\"");
+
+        strcat(sql, " (");
 
         for (int i = 0; i < m->num_fields; i++) {
             char buffer[512];
             const char *type_str = "TEXT";
-
             switch (m->fields[i].type) {
                 case TYPE_INT: type_str = "INTEGER"; break;
-                case TYPE_FLOAT: type_str = "DOUBLE PRECISION"; break;
+                case TYPE_FLOAT: type_str = "REAL"; break;
                 case TYPE_STRING: type_str = "TEXT"; break;
-                case TYPE_BOOL: type_str = "BOOLEAN"; break;
+                case TYPE_BOOL: type_str = "INTEGER"; break;
             }
 
             if (i == 0) {
-              if (strcmp(m->fields[i].name, "id") == 0) {
-                  snprintf(buffer, sizeof(buffer),
-                      "\"%s\" SERIAL PRIMARY KEY%s",
-                      m->fields[i].name,
-                      (m->num_fields > 1 || m->num_foreign_keys > 0) ? ", " : ""
-                  );
-              } else {
-                  snprintf(buffer, sizeof(buffer),
-                      "\"%s\" %s PRIMARY KEY%s",
-                      m->fields[i].name,
-                      type_str,
-                      (m->num_fields > 1 || m->num_foreign_keys > 0) ? ", " : ""
-                  );
-              }
+                // AUTO-INCREMENT for Postgres: use SERIAL
+                if (strcmp(m->fields[i].name, "id") == 0 && m->fields[i].type == TYPE_INT) {
+                    snprintf(buffer, sizeof(buffer), "%s SERIAL PRIMARY KEY%s",
+                             m->fields[i].name,
+                             m->num_fields - 1 > 0 || m->num_foreign_keys > 0 ? ", " : "");
+                } else {
+                    snprintf(buffer, sizeof(buffer), "%s %s PRIMARY KEY%s",
+                             m->fields[i].name, type_str,
+                             m->num_fields - 1 > 0 || m->num_foreign_keys > 0 ? ", " : "");
+                }
             } else {
-                snprintf(buffer, sizeof(buffer),
-                    "\"%s\" %s%s",
-                    m->fields[i].name,
-                    type_str,
-                    (i < m->num_fields - 1 || m->num_foreign_keys > 0) ? ", " : ""
-                );
+                snprintf(buffer, sizeof(buffer), "%s %s%s",
+                        m->fields[i].name, type_str,
+                        i < m->num_fields - 1 || m->num_foreign_keys > 0 ? ", " : "");
             }
+
             strcat(sql, buffer);
         }
 
         for (int i = 0; i < m->num_foreign_keys; i++) {
             char buffer[512];
-            snprintf(buffer, sizeof(buffer),
-                "FOREIGN KEY(\"%s\") REFERENCES \"%s\"(\"%s\")%s",
-                m->foreign_keys[i].field_name,
-                m->foreign_keys[i].ref_table,
-                m->foreign_keys[i].ref_field,
-                i < m->num_foreign_keys - 1 ? ", " : ""
-            );
+            snprintf(buffer, sizeof(buffer), "FOREIGN KEY(%s) REFERENCES \"%s\"(%s)%s",
+                     m->foreign_keys[i].field_name,
+                     m->foreign_keys[i].ref_table,
+                     m->foreign_keys[i].ref_field,
+                     i < m->num_foreign_keys - 1 ? ", " : "");
             strcat(sql, buffer);
         }
 
         strcat(sql, ");");
-        db_exec(db, sql);
+
+        if (!db_exec(db, sql)) {
+            printf("Failed to create table %s\n", m->name);
+        } else {
+            printf("Table %s created or already exists.\n", m->name);
+        }
+
         m = m->next;
     }
 }
@@ -559,53 +542,7 @@ void run_model_definitions(void) {
     }
 }
 
-void model(
-    const char *name,
-    Field *primary_key,
-    Field *fields,
-    int num_fields,
-    ForeignKey *foreign_keys,
-    int num_foreign_keys
-) {
-    Model *m = calloc(1, sizeof(Model));
-    if (!m) { perror("malloc"); exit(1); }
-
-    m->name = strdup(name);
-
-    int auto_id = (primary_key == NULL);
-    m->num_fields = num_fields + 1;
-    m->fields = malloc(sizeof(Field) * m->num_fields);
-
-    if (auto_id) {
-        m->fields[0].type = TYPE_INT;
-        m->fields[0].name = strdup("id");
-    } else {
-        m->fields[0].type = primary_key->type;
-        m->fields[0].name = strdup(primary_key->name);
-    }
-
-    for (int i = 0; i < num_fields; i++) {
-        m->fields[i + 1].type = fields[i].type;
-        m->fields[i + 1].name = strdup(fields[i].name);
-    }
-
-    m->num_foreign_keys = num_foreign_keys;
-    if (num_foreign_keys > 0 && foreign_keys) {
-        m->foreign_keys = malloc(sizeof(ForeignKey) * num_foreign_keys);
-        for (int i = 0; i < num_foreign_keys; i++) {
-            m->foreign_keys[i].field_name = strdup(foreign_keys[i].field_name);
-            m->foreign_keys[i].ref_table  = strdup(foreign_keys[i].ref_table);
-            m->foreign_keys[i].ref_field  = strdup(foreign_keys[i].ref_field);
-        }
-    }
-
-    m->next = model_registry;
-    model_registry = m;
-
-    generate_crud_files(m);
-}
-
-int main(void) {
+int main() {
     Database *db;
     if (!db_open(&db)) {
         printf("Failed to open database\n");
