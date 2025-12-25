@@ -140,19 +140,19 @@ static void generate_crud_files(Model *m) {
         if (i < m->num_fields - 1) fprintf(fc, ", ");
     }
 
-    fprintf(fc, ");\n    return db_exec(db, sql);\n}\n\n");
+    fprintf(fc, ");\n    return db_exec_safe(db, sql);\n}\n\n");
 
     // CREATE MANY
     fprintf(fc,
         "bool %s_create_many(Database *db, %sList *list) {\n"
-        "    if (!db_exec(db, \"BEGIN\")) return false;\n"
+        "    if (!db_exec_safe(db, \"BEGIN\")) return false;\n"
         "    for (size_t i = 0; i < list->count; i++) {\n"
         "        if (!%s_create(db, &list->items[i])) {\n"
-        "            db_exec(db, \"ROLLBACK\");\n"
+        "            db_exec_safe(db, \"ROLLBACK\");\n"
         "            return false;\n"
         "        }\n"
         "    }\n"
-        "    return db_exec(db, \"COMMIT\");\n"
+        "    return db_exec_safe(db, \"COMMIT\");\n"
         "}\n\n",
         m->name, m->name, m->name
     );
@@ -195,7 +195,7 @@ static void generate_crud_files(Model *m) {
     );
 
     fprintf(fc,
-        "    if (!db_query(db, sql, &r)) return false;\n"
+        "    if (!db_query_safe(db, sql, &r)) return false;\n"
         "    bool ok = false;\n"
         "    if (db_result_next(r)) {\n"
     );
@@ -236,7 +236,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         " FROM \\\"%s\\\"\";\n"
-        "    if (!db_query(db, sql, &r)) return false;\n"
+        "    if (!db_query_safe(db, sql, &r)) return false;\n"
         "    size_t cap = 8;\n"
         "    out->count = 0;\n"
         "    out->items = calloc(cap, sizeof(%s));\n"
@@ -294,7 +294,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         " FROM \\\"%s\\\" WHERE %%s\", where);\n"
-        "    if (!db_query(db, sql, &r)) return false;\n"
+        "    if (!db_query_safe(db, sql, &r)) return false;\n"
         "    size_t cap = 8;\n"
         "    out->count = 0;\n"
         "    out->items = calloc(cap, sizeof(%s));\n"
@@ -411,7 +411,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         ", obj->%s);\n"
-        "    return db_exec(db, sql);\n"
+        "    return db_exec_safe(db, sql);\n"
         "}\n\n",
         m->fields[0].name
     );
@@ -419,14 +419,14 @@ static void generate_crud_files(Model *m) {
     // UPDATE MANY
     fprintf(fc,
         "bool %s_update_many(Database *db, %sList *list) {\n"
-        "    if (!db_exec(db, \"BEGIN\")) return false;\n"
+        "    if (!db_exec_safe(db, \"BEGIN\")) return false;\n"
         "    for (size_t i = 0; i < list->count; i++) {\n"
         "        if (!%s_update(db, &list->items[i])) {\n"
-        "            db_exec(db, \"ROLLBACK\");\n"
+        "            db_exec_safe(db, \"ROLLBACK\");\n"
         "            return false;\n"
         "        }\n"
         "    }\n"
-        "    return db_exec(db, \"COMMIT\");\n"
+        "    return db_exec_safe(db, \"COMMIT\");\n"
         "}\n\n",
         m->name, m->name, m->name
     );
@@ -451,7 +451,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         "\", %s);\n"
-        "    return db_exec(db, sql);\n"
+        "    return db_exec_safe(db, sql);\n"
         "}\n",
         m->fields[0].name
     );
@@ -459,14 +459,14 @@ static void generate_crud_files(Model *m) {
     // DELETE MANY
     fprintf(fc,
         "bool %s_delete_many(Database *db, %sList *list) {\n"
-        "    if (!db_exec(db, \"BEGIN\")) return false;\n"
+        "    if (!db_exec_safe(db, \"BEGIN\")) return false;\n"
         "    for (size_t i = 0; i < list->count; i++) {\n"
         "        if (!%s_delete(db, list->items[i].%s)) {\n"
-        "            db_exec(db, \"ROLLBACK\");\n"
+        "            db_exec_safe(db, \"ROLLBACK\");\n"
         "            return false;\n"
         "        }\n"
         "    }\n"
-        "    return db_exec(db, \"COMMIT\");\n"
+        "    return db_exec_safe(db, \"COMMIT\");\n"
         "}\n\n",
         m->name,
         m->name,
@@ -540,7 +540,7 @@ void generate_model_tables(Database *db) {
         }
 
         strcat(sql, ");");
-        db_exec(db, sql);
+        db_exec_safe(db, sql);
         m = m->next;
     }
 }

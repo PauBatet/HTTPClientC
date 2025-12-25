@@ -184,7 +184,6 @@ int run_worker() {
         return 1;
     }
 
-    // Initialize Database
     init_db();
 
     // Initialize the request queue
