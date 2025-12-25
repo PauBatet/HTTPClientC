@@ -1,8 +1,7 @@
 ## TODO
 
-# Test DB things and improve them
-# Implement a module to make http requests
-
-# HTML Templating, add nested HTML/React style components
-# Make templates
-# Explore HTTPS
+# Test ALL DB Operations
+# Explore DB SQLinjection protection
+# Make Dockerfile with HTTPS (And a PostgreSQL DB)
+# Make template generator
+# Create first release

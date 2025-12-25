@@ -109,13 +109,25 @@ void destroy_queue(RequestQueue *q) {
 // Handle a single request
 void handle_request(HTTPRequest *request) {
     printf("Processing request: %s %s\n", request->method, request->path);
+
     for (int i = 0; routes[i].path != NULL; i++) {
         if (route_match(routes[i].path, request->path, request)) {
+            // ---- Print query params ----
             if (request->param_count > 0) {
-                for (size_t i = 0; i < request->param_count; i++) {
+                printf("Query params:\n");
+                for (size_t j = 0; j < request->param_count; j++) {
                     printf("  %s = %s\n",
-                        request->params[i].key ? request->params[i].key : "(null)",
-                        request->params[i].value ? request->params[i].value : "(null)");
+                        request->params[j].key   ? request->params[j].key   : "(null)",
+                        request->params[j].value ? request->params[j].value : "(null)");
+                }
+            }
+            // ---- Print headers ----
+            if (request->header_count > 0) {
+                printf("Headers:\n");
+                for (size_t j = 0; j < request->header_count; j++) {
+                    printf("  %s: %s\n",
+                        request->header_list[j].key   ? request->header_list[j].key   : "(null)",
+                        request->header_list[j].value ? request->header_list[j].value : "(null)");
                 }
             }
             routes[i].handler(request);
@@ -152,6 +164,15 @@ void signal_handler(int sig) {
     }
 }
 
+void init_db() {
+    //Open Database
+    if (!db_open(&db)) {
+        printf("Failed to open database\n");
+        return;
+    }
+    return;
+}
+
 int run_worker() {
     // Set up signal handling
     signal(SIGINT, signal_handler);
@@ -162,6 +183,8 @@ int run_worker() {
         printf("Failed to create server\n");
         return 1;
     }
+
+    init_db();
 
     // Initialize the request queue
     init_queue(&queue);
@@ -198,32 +221,12 @@ int run_worker() {
     return 0;
 }
 
-void init_db() {
-    //Open Database
-    if (!db_open(&db, "app.db")) {
-        printf("Failed to open database\n");
-        return;
-    }
-
-    db_exec(db,
-        "CREATE TABLE IF NOT EXISTS visits ("
-        "id INTEGER PRIMARY KEY, "
-        "count INTEGER DEFAULT 0"
-        ");"
-
-        "INSERT OR IGNORE INTO visits (id, count)"
-        "VALUES (1, 0);"
-    );
-    return;
-}
-
 int main() {
     while (1) {
         pid_t pid = fork();
 
         if (pid == 0) {
             // CHILD → run the server normally
-            init_db();
             exit(run_worker());
         }
 
