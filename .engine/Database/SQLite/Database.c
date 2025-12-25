@@ -34,17 +34,6 @@ void db_close(Database *db) {
     free(db);
 }
 
-bool db_init(database *db) {
-    return db_exec(db,
-        "create table if not exists visits ("
-        "id integer primary key, "
-        "count integer default 0"
-        ");"
-        "insert or ignore into visits (id, count) "
-        "values (1, 0);"
-    );
-}
-
 bool db_exec(Database *db, const char *sql) {
     char *err = NULL;
     int rc = sqlite3_exec(db->conn, sql, NULL, NULL, &err);

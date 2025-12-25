@@ -170,12 +170,6 @@ void init_db() {
         printf("Failed to open database\n");
         return;
     }
-
-    if (!db_init(db)) {
-        fprintf(stderr, "Failed to initialize database schema\n");
-        db_close(db);
-        return;
-    }
     return;
 }
 
