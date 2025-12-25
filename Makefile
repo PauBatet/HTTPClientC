@@ -6,6 +6,7 @@ HTTP_SERVER_DIR      := $(ENGINE_DIR)/HTTPServer
 HTML_TEMPLATING_DIR  := $(ENGINE_DIR)/HTMLTemplating
 DATABASE_DIR         := $(ENGINE_DIR)/Database
 ROUTING_DIR          := $(ENGINE_DIR)/Routing
+MODEL_DIR            := $(ENGINE_DIR)/Models
 BUILD_DIR            := $(CACHE_DIR)/build
 
 # Ensure dirs exist (best-effort at parse-time)
@@ -78,14 +79,16 @@ migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
 		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
 		DB_LIBS=""; \
+		MD_SRC="$(MODEL_DIR)/SQLite/Models.c"; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
 		DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
 		DB_LIBS="-lpq"; \
+		MD_SRC="$(MODEL_DIR)/PostgreSQL/Models.c"; \
 	else \
 		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/migrate \
-		$(ENGINE_DIR)/Models/Models.c $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS || exit 1; \
+		$$MD_SRC $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS || exit 1; \
 	./$(CACHE_DIR)/models/migrate || (echo "Migration binary failed"; exit 1); \
 	echo "Migration finished."
 

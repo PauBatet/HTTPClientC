@@ -501,21 +501,29 @@ void generate_model_tables(Database *db) {
                 case TYPE_BOOL: type_str = "BOOLEAN"; break;
             }
 
-            if (i == 0 && strcmp(m->fields[i].name, "id") == 0) {
-                snprintf(buffer, sizeof(buffer),
-                    "\"%s\" SERIAL PRIMARY KEY%s",
-                    m->fields[i].name,
-                    (m->num_fields > 1 || m->num_foreign_keys) ? ", " : ""
-                );
+            if (i == 0) {
+              if (strcmp(m->fields[i].name, "id") == 0) {
+                  snprintf(buffer, sizeof(buffer),
+                      "\"%s\" SERIAL PRIMARY KEY%s",
+                      m->fields[i].name,
+                      (m->num_fields > 1 || m->num_foreign_keys > 0) ? ", " : ""
+                  );
+              } else {
+                  snprintf(buffer, sizeof(buffer),
+                      "\"%s\" %s PRIMARY KEY%s",
+                      m->fields[i].name,
+                      type_str,
+                      (m->num_fields > 1 || m->num_foreign_keys > 0) ? ", " : ""
+                  );
+              }
             } else {
                 snprintf(buffer, sizeof(buffer),
                     "\"%s\" %s%s",
                     m->fields[i].name,
                     type_str,
-                    (i < m->num_fields - 1 || m->num_foreign_keys) ? ", " : ""
+                    (i < m->num_fields - 1 || m->num_foreign_keys > 0) ? ", " : ""
                 );
             }
-
             strcat(sql, buffer);
         }
 

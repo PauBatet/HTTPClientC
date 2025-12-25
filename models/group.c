@@ -7,8 +7,6 @@ void register_group_model(void) {
         {"num_members", TYPE_INT}
     };
 
-    model("Group", NULL, group_fields, 2, NULL, 0);
-
     Field user_fields[] = {
         {"name", TYPE_STRING},
         {"age", TYPE_INT},
@@ -24,6 +22,7 @@ void register_group_model(void) {
 
     model("User", &pk_field, user_fields, 4, user_fk, 1);
 
+    model("Group", NULL, group_fields, 2, NULL, 0);
 }
 
 __attribute__((constructor))
