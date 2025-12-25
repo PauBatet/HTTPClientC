@@ -74,6 +74,7 @@ migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
 	@DB_BACKEND=$$(cat $(CACHE_DIR)/db_backend 2>/dev/null || echo ""); \
 	[ -n "$$DB_BACKEND" ] || (echo "ERROR: db backend not set; run 'make $(CACHE_DIR)/db_backend' or check config.c"; exit 1); \
 	MODEL_SRCS=$$(xargs -a $(CACHE_DIR)/model_paths -I {} find {} -maxdepth 1 -type f -name '*.c' 2>/dev/null || true); \
+	[ -f "$(SRC_DIR)models.c" ] && MODEL_SRCS="$$MODEL_SRCS $(SRC_DIR)models.c"; \
 	echo " DB backend: $$DB_BACKEND"; \
 	echo " Model sources: $$MODEL_SRCS"; \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
@@ -102,7 +103,6 @@ $(TARGET):
 	@DB_BACKEND=$$(cat $(CACHE_DIR)/db_backend 2>/dev/null || echo ""); \
 	[ -n "$$DB_BACKEND" ] || (echo "ERROR: db backend not set; run 'make $(CACHE_DIR)/db_backend' or check config.c"; exit 1); \
 	MODEL_C=$$(ls -1 $(CACHE_DIR)/models/*.c 2>/dev/null || true); \
-	[ -f $(SRC_DIR)/models.c ] && MODEL_C="$(SRC_DIR)/models.c $$MODEL_C"; \
 	OBJS=""; \
 	for f in $$MODEL_C; do \
 		base=$$(basename $$f .c); \
