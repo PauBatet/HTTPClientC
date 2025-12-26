@@ -35,6 +35,7 @@ typedef struct Model {
 
     ForeignKey *foreign_keys;
     int num_foreign_keys;
+    int has_explicit_pk;
 
     struct Model *next;
 } Model;

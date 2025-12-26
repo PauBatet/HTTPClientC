@@ -130,6 +130,44 @@ run: $(TARGET)
 	@./$(TARGET)
 
 # ------------------------------------------------------------
+# Tests
+# ------------------------------------------------------------
+
+TEST_DIR        := $(SRC_DIR)tests
+TEST_BUILD_DIR  := $(BUILD_DIR)/tests
+UNITY_ROOT      := ./tests/unity
+TEST_FILES      := $(wildcard $(TEST_DIR)/test_*.c)
+
+$(TEST_BUILD_DIR):
+	mkdir -p $(TEST_BUILD_DIR)
+
+.PHONY: test
+test: migrate $(TEST_BUILD_DIR)
+	@echo "🧪 Starting Test Suite..."
+	@DB_BACKEND=$$(cat $(CACHE_DIR)/db_backend 2>/dev/null); \
+	if [ "$$DB_BACKEND" = "sqlite" ]; then \
+		DB_FILES="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
+		DB_LIBS=""; \
+	else \
+		DB_FILES="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
+		DB_LIBS="-lpq"; \
+	fi; \
+	T_CFLAGS="$(CFLAGS) -I$(UNITY_ROOT) -DUNIT_TEST"; \
+	T_LIBS="-lpthread -ldl $$DB_LIBS"; \
+	for test_file in $(TEST_FILES); do \
+		test_name=$$(basename $$test_file .c); \
+		echo "\n--------------------------------------------------"; \
+		echo "🛠️  Compiling $$test_name..."; \
+		GEN_MODELS=$$(ls $(CACHE_DIR)/models/*.c 2>/dev/null || true); \
+		$(CC) $$T_CFLAGS $(UNITY_ROOT)/unity.c $(SRC_DIR)/config.c \
+			$$GEN_MODELS $$DB_FILES $$test_file \
+			-o $(TEST_BUILD_DIR)/$$test_name $$T_LIBS || exit 1; \
+		echo "🚀 Running $$test_name..."; \
+		$(TEST_BUILD_DIR)/$$test_name || exit 1; \
+	done; \
+	echo "\n✅ All tests passed!"
+
+# ------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------
 
@@ -140,3 +178,7 @@ full_clean:
 	rm -rf $(CACHE_DIR)
 	rm -f GeneratedModels.h
 
+.PHONY: clean_test
+clean_test:
+	@rm -rf $(TEST_BUILD_DIR)
+	@rm -f test.db 
