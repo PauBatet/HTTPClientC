@@ -52,17 +52,17 @@ void test_User_Individual_CRUD(void) {
 
     // 2. READ
     User fetched = {0};
-    TEST_ASSERT_TRUE(User_read(test_db, unique_dni, &fetched));
+    TEST_ASSERT_TRUE_MESSAGE(User_read(test_db, unique_dni, &fetched), "User_read failed");
     TEST_ASSERT_EQUAL_STRING("Test User", fetched.name);
     TEST_ASSERT_EQUAL_INT(shared_group_id, fetched.group_id);
 
     // 3. UPDATE
     free(fetched.name);
     fetched.name = strdup("Updated Name");
-    TEST_ASSERT_TRUE(User_update(test_db, &fetched));
+    TEST_ASSERT_TRUE_MESSAGE(User_update(test_db, &fetched), "User_update failed");
 
     // 4. DELETE
-    TEST_ASSERT_TRUE(User_delete(test_db, unique_dni));
+    TEST_ASSERT_TRUE_MESSAGE(User_delete(test_db, unique_dni), "User_delete failed");
 
     User_free(&u);
     User_free(&fetched);
@@ -92,11 +92,11 @@ void test_User_Bulk_Operations(void) {
     UserList results = {0};
     char where[128];
     sprintf(where, "\"DNI\" LIKE 'DNI_%s_%%'", batch_tag);
-    TEST_ASSERT_TRUE(User_query(test_db, where, &results));
+    TEST_ASSERT_TRUE_MESSAGE(User_query(test_db, where, &results), "User_query failed");
     TEST_ASSERT_EQUAL_INT(5, results.count);
 
     // 3. DELETE MANY
-    TEST_ASSERT_TRUE(User_delete_many(test_db, &results));
+    TEST_ASSERT_TRUE_MESSAGE(User_delete_many(test_db, &results), "User_delete_many failed");
 
     UserList_free(&list);
     UserList_free(&results);

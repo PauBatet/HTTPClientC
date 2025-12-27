@@ -196,9 +196,9 @@ static void generate_crud_files(Model *m) {
     );
 
     fprintf(fc,
-        "    if (!db_query_safe(db, sql, &r)) return false;\n"
-        "    bool ok = false;\n"
-        "    if (db_result_next(r)) {\n"
+        "   if (!db_query_safe(db, sql, &r)) return false;\n"
+        "   bool ok = false;\n"
+        "   if (db_result_next(r)) {\n"
     );
 
     for (int i = 0; i < m->num_fields; i++) {

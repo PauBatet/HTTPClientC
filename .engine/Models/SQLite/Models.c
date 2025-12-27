@@ -163,10 +163,10 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
-    fprintf(fc, " FROM \\\"%s\\\" WHERE %s = ", m->name, m->fields[0].name);
+    fprintf(fc, " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ", m->name, m->fields[0].name);
 
     if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
     else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
@@ -175,9 +175,9 @@ static void generate_crud_files(Model *m) {
     fprintf(fc, "\", %s);\n", m->fields[0].name);
 
     fprintf(fc,
-        "if (!db_query_safe(db, sql, &r)) return false;\n"
-        "bool ok = false;\n"
-        "if (db_result_next(r)) {\n"
+        "   if (!db_query_safe(db, sql, &r)) return false;\n"
+        "   bool ok = false;\n"
+        "   if (db_result_next(r)) {\n"
     );
 
     for (int i = 0; i < m->num_fields; i++) {
@@ -206,7 +206,7 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc,
@@ -259,7 +259,7 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc,
@@ -345,7 +345,7 @@ static void generate_crud_files(Model *m) {
         if (i < m->num_fields - 1) fprintf(fc, ", ");
     }
 
-    fprintf(fc, " WHERE %s = ", m->fields[0].name);
+    fprintf(fc, " WHERE \\\"%s\\\" = ", m->fields[0].name);
     if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
     else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
     else fprintf(fc, "'%%s'");
@@ -376,7 +376,7 @@ static void generate_crud_files(Model *m) {
     fprintf(fc,
         "bool %s_delete(Database *db, %s %s) {\n"
         "    char sql[256];\n"
-        "    snprintf(sql, sizeof(sql), \"DELETE FROM \\\"%s\\\" WHERE %s = ",
+        "    snprintf(sql, sizeof(sql), \"DELETE FROM \\\"%s\\\" WHERE \\\"%s\\\" = ",
         m->name, pk_ctype, m->fields[0].name, m->name, m->fields[0].name
     );
 
