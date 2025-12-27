@@ -22,4 +22,4 @@ const char *PG_USER     = "appuser";
 const char *PG_PASSWORD = "apppassword";
 
 // SQLite file path
-const char *SQLITE_PATH = "app.db";
+const char *SQLITE_PATH = "test.db";

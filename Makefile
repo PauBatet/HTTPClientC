@@ -143,6 +143,7 @@ $(TEST_BUILD_DIR):
 
 $(CACHE_DIR)/tests:
 	mkdir -p $(CACHE_DIR)/tests
+
 $(CACHE_DIR)/tests/mock_db_backend: $(SRC_DIR)/tests/mock_config.c | $(CACHE_DIR)/tests
 	@echo "Reading DB backend from config.c..."
 	@TMP=$$(mktemp /tmp/gen_db_backend.XXXX.c); \
@@ -211,4 +212,5 @@ full_clean:
 .PHONY: clean_test
 clean_test:
 	@rm -rf $(TEST_BUILD_DIR)
+	@rm -rf $(CACHE_DIR)/tests
 	@rm -f test.db 
