@@ -133,19 +133,19 @@ static void generate_crud_files(Model *m) {
         fprintf(fc, ", obj->%s", m->fields[i].name);
     }
 
-    fprintf(fc, ");\n    return db_exec_safe(db, sql);\n}\n\n");
+    fprintf(fc, ");\n    return db_exec(db, sql);\n}\n\n");
 
     // CREATE MANY
     fprintf(fc,
         "bool %s_create_many(Database *db, %sList *list) {\n"
-        "    if (!db_exec_safe(db, \"BEGIN\")) return false;\n"
+        "    if (!db_exec(db, \"BEGIN\")) return false;\n"
         "    for (size_t i = 0; i < list->count; i++) {\n"
         "        if (!%s_create(db, &list->items[i])) {\n"
-        "            db_exec_safe(db, \"ROLLBACK\");\n"
+        "            db_exec(db, \"ROLLBACK\");\n"
         "            return false;\n"
         "        }\n"
         "    }\n"
-        "    return db_exec_safe(db, \"COMMIT\");\n"
+        "    return db_exec(db, \"COMMIT\");\n"
         "}\n\n",
         m->name, m->name, m->name
     );
@@ -174,7 +174,7 @@ static void generate_crud_files(Model *m) {
     fprintf(fc, "\", %s);\n", m->fields[0].name);
 
     fprintf(fc,
-        "if (!db_query_safe(db, sql, &r)) return false;\n"
+        "if (!db_query(db, sql, &r)) return false;\n"
         "bool ok = false;\n"
         "if (db_result_next(r)) {\n"
     );
@@ -210,7 +210,105 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         " FROM \\\"%s\\\"\";\n"
-        "    if (!db_query_safe(db, sql, &r)) return false;\n"
+        "    if (!db_query(db, sql, &r)) return false;\n"
+        "    size_t cap = 8;\n"
+        "    out->count = 0;\n"
+        "    out->items = calloc(cap, sizeof(%s));\n"
+        "    while (db_result_next(r)) {\n"
+        "        if (out->count == cap) {\n"
+        "            cap *= 2;\n"
+        "            void *tmp = realloc(out->items, sizeof(%s) * cap);\n"
+        "            if (!tmp) {\n"
+        "                for (size_t j = 0; j < out->count; j++) %s_free(&out->items[j]);\n"
+        "                free(out->items);\n"
+        "                out->items = NULL;\n"
+        "                out->count = 0;\n"
+        "                db_result_free(r);\n"
+        "                return false;\n"
+        "            }\n"
+        "            out->items = tmp;\n"
+        "        }\n"
+        "        %s *obj = &out->items[out->count++];\n",
+        m->name, m->name, m->name, m->name, m->name
+    );
+
+    for (int i = 0; i < m->num_fields; i++) {
+        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
+            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
+        else if (m->fields[i].type == TYPE_FLOAT)
+            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
+        else
+            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
+    }
+
+    fprintf(fc,
+        "    }\n"
+        "    db_result_free(r);\n"
+        "    return true;\n"
+        "}\n\n"
+    );
+
+    // READ FOR UPDATE
+    fprintf(fc,
+        "bool %s_read_for_update(Database *db, %s %s, %s *obj) {\n"
+        "    %s_free(obj);\n"
+        "    memset(obj, 0, sizeof(*obj));\n"
+        "    DBResult *r;\n"
+        "    char sql[512];\n"
+        "    snprintf(sql, sizeof(sql), \"SELECT ",
+        m->name, pk_ctype, m->fields[0].name, m->name, m->name
+    );
+
+    for (int i = 0; i < m->num_fields; i++) {
+        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+    }
+
+    fprintf(fc, " FROM \\\"%s\\\" WHERE %s = ", m->name, m->fields[0].name);
+
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
+    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
+    else fprintf(fc, "'%%s'");
+
+    fprintf(fc, "FOR UPDATE \", %s);\n", m->fields[0].name);
+
+    fprintf(fc,
+        "if (!db_query(db, sql, &r)) return false;\n"
+        "bool ok = false;\n"
+        "if (db_result_next(r)) {\n"
+    );
+
+    for (int i = 0; i < m->num_fields; i++) {
+        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
+            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
+        else if (m->fields[i].type == TYPE_FLOAT)
+            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
+        else
+            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
+    }
+
+    fprintf(fc,
+        "        ok = true;\n"
+        "    }\n"
+        "    db_result_free(r);\n"
+        "    return ok;\n"
+        "}\n\n"
+    );
+
+    // READ ALL FOR UPDATE
+    fprintf(fc,
+        "bool %s_read_all_for_update(Database *db, %sList *out) {\n"
+        "    DBResult *r;\n"
+        "    const char *sql = \"SELECT ",
+        m->name, m->name
+    );
+
+    for (int i = 0; i < m->num_fields; i++) {
+        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+    }
+
+    fprintf(fc,
+        " FROM \\\"%s\\\" FOR UPDATE\";\n"
+        "    if (!db_query(db, sql, &r)) return false;\n"
         "    size_t cap = 8;\n"
         "    out->count = 0;\n"
         "    out->items = calloc(cap, sizeof(%s));\n"
@@ -263,7 +361,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         " FROM \\\"%s\\\" WHERE %%s\", where);\n"
-        "    if (!db_query_safe(db, sql, &r)) return false;\n"
+        "    if (!db_query(db, sql, &r)) return false;\n"
         "    size_t cap = 8;\n"
         "    out->count = 0;\n"
         "    out->items = calloc(cap, sizeof(%s));\n"
@@ -354,19 +452,19 @@ static void generate_crud_files(Model *m) {
         if (i < m->num_fields - 1) fprintf(fc, ", ");
     }
     fprintf(fc, ", obj->%s);\n", m->fields[0].name);
-    fprintf(fc, "    return db_exec_safe(db, sql);\n}\n\n");
+    fprintf(fc, "    return db_exec(db, sql);\n}\n\n");
 
     //UPDETE MANY
     fprintf(fc,
         "bool %s_update_many(Database *db, %sList *list) {\n"
-        "    if (!db_exec_safe(db, \"BEGIN\")) return false;\n"
+        "    if (!db_exec(db, \"BEGIN\")) return false;\n"
         "    for (size_t i = 0; i < list->count; i++) {\n"
         "        if (!%s_update(db, &list->items[i])) {\n"
-        "            db_exec_safe(db, \"ROLLBACK\");\n"
+        "            db_exec(db, \"ROLLBACK\");\n"
         "            return false;\n"
         "        }\n"
         "    }\n"
-        "    return db_exec_safe(db, \"COMMIT\");\n"
+        "    return db_exec(db, \"COMMIT\");\n"
         "}\n\n",
         m->name, m->name, m->name
     );
@@ -384,19 +482,19 @@ static void generate_crud_files(Model *m) {
     else fprintf(fc, "'%%s'");
     fprintf(fc, "\", %s);\n", m->fields[0].name);
 
-    fprintf(fc, "    return db_exec_safe(db, sql);\n}\n");
+    fprintf(fc, "    return db_exec(db, sql);\n}\n");
 
     //DELETE MANY
     fprintf(fc,
         "bool %s_delete_many(Database *db, %sList *list) {\n"
-        "    if (!db_exec_safe(db, \"BEGIN\")) return false;\n"
+        "    if (!db_exec(db, \"BEGIN\")) return false;\n"
         "    for (size_t i = 0; i < list->count; i++) {\n"
         "        if (!%s_delete(db, list->items[i].%s)) {\n"
-        "            db_exec_safe(db, \"ROLLBACK\");\n"
+        "            db_exec(db, \"ROLLBACK\");\n"
         "            return false;\n"
         "        }\n"
         "    }\n"
-        "    return db_exec_safe(db, \"COMMIT\");\n"
+        "    return db_exec(db, \"COMMIT\");\n"
         "}\n\n",
         m->name,
         m->name,
@@ -512,7 +610,7 @@ void generate_model_tables(Database *db) {
 
         strcat(sql, ");");
 
-        if (!db_exec_safe(db, sql)) {
+        if (!db_exec(db, sql)) {
             printf("Failed to create table %s\n", m->name);
         } else {
             printf("Table %s created or already exists.\n", m->name);

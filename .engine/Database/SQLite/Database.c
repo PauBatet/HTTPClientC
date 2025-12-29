@@ -6,8 +6,6 @@
 #include <string.h>
 #include <pthread.h>
 
-static pthread_mutex_t db_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 struct Database {
     sqlite3 *conn;
 };
@@ -45,27 +43,6 @@ bool db_exec(Database *db, const char *sql) {
     return true;
 }
 
-/*
-bool db_prepare(Database *db, const char *sql, void **stmt)
-{
-    return sqlite3_prepare_v2(
-        db->conn, sql, -1,
-        (sqlite3_stmt **)stmt,
-        NULL
-    ) == SQLITE_OK;
-}
-
-bool db_step(void *stmt)
-{
-    return sqlite3_step((sqlite3_stmt *)stmt) == SQLITE_ROW;
-}
-
-void db_finalize(void *stmt)
-{
-    sqlite3_finalize((sqlite3_stmt *)stmt);
-}
-*/
-
 bool db_query(Database *db, const char *sql, DBResult **out) {
     DBResult *r = malloc(sizeof(DBResult));
     if (!r) return false;
@@ -102,16 +79,64 @@ void db_result_free(DBResult *r) {
     free(r);
 }
 
-bool db_exec_safe(Database *db, const char *sql) {
-    pthread_mutex_lock(&db_mutex);
-    bool ok = db_exec(db, sql);
-    pthread_mutex_unlock(&db_mutex);
-    return ok;
+/* -------------------- Transactions with depth -------------------- */
+
+bool db_begin(Database *db)
+{
+    if (!db) return false;
+
+    if (db->tx_depth == 0) {
+        // Only send BEGIN if we’re not already in a transaction
+        if (!db_exec(db, "BEGIN")) return false;
+    } else {
+        // Optional: implement SAVEPOINTs here for nested transactions
+        char sql[64];
+        snprintf(sql, sizeof(sql), "SAVEPOINT sp_%d", db->tx_depth);
+        if (!db_exec(db, sql)) return false;
+    }
+
+    db->tx_depth++;
+    return true;
 }
 
-bool db_query_safe(Database *db, const char *sql, DBResult **r) {
-    pthread_mutex_lock(&db_mutex);
-    bool ok = db_query(db, sql, r);
-    pthread_mutex_unlock(&db_mutex);
-    return ok;
+bool db_commit(Database *db)
+{
+    if (!db) return false;
+
+    if (db->tx_depth <= 0) {
+        fprintf(stderr, "db_commit called without a matching db_begin\n");
+        return false;
+    }
+
+    db->tx_depth--;
+
+    if (db->tx_depth == 0) {
+        return db_exec(db, "COMMIT");
+    } else {
+        // Optional: nothing, or release savepoint
+        char sql[64];
+        snprintf(sql, sizeof(sql), "RELEASE SAVEPOINT sp_%d", db->tx_depth);
+        return db_exec(db, sql);
+    }
+}
+
+bool db_rollback(Database *db)
+{
+    if (!db) return false;
+
+    if (db->tx_depth <= 0) {
+        fprintf(stderr, "db_rollback called without a matching db_begin\n");
+        return false;
+    }
+
+    db->tx_depth--;
+
+    if (db->tx_depth == 0) {
+        return db_exec(db, "ROLLBACK");
+    } else {
+        // Roll back to last savepoint
+        char sql[64];
+        snprintf(sql, sizeof(sql), "ROLLBACK TO SAVEPOINT sp_%d", db->tx_depth);
+        return db_exec(db, sql);
+    }
 }
