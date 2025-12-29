@@ -130,6 +130,75 @@ run: $(TARGET)
 	@./$(TARGET)
 
 # ------------------------------------------------------------
+# Tests
+# ------------------------------------------------------------
+
+TEST_DIR        := $(SRC_DIR)tests
+TEST_BUILD_DIR  := $(BUILD_DIR)/tests
+UNITY_ROOT      := ./tests/unity
+TEST_FILES      := $(wildcard $(TEST_DIR)/test_*.c)
+
+$(TEST_BUILD_DIR):
+	mkdir -p $(TEST_BUILD_DIR)
+
+$(CACHE_DIR)/tests:
+	mkdir -p $(CACHE_DIR)/tests
+
+$(CACHE_DIR)/tests/mock_db_backend: $(SRC_DIR)/tests/mock_config.c | $(CACHE_DIR)/tests
+	@echo "Reading DB backend from config.c..."
+	@TMP=$$(mktemp /tmp/gen_db_backend.XXXX.c); \
+	printf '%s\n' '#include "tests/mock_config.c"' > $$TMP; \
+	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
+	printf '%s\n' 'int main() { printf("%s", DB_BACKEND); return 0; }' >> $$TMP; \
+	$(CC) $(CFLAGS) $$TMP -o $(CACHE_DIR)/gen_db_backend; \
+	./$(CACHE_DIR)/gen_db_backend > $(CACHE_DIR)/tests/mock_db_backend || true; \
+	rm -f $$TMP $(CACHE_DIR)/gen_db_backend; \
+	echo "-> $(CACHE_DIR)/tests/mock_db_backend contains: $$(cat $(CACHE_DIR)/tests/mock_db_backend 2>/dev/null)"
+
+.PHONY: test_migrate
+test_migrate: $(CACHE_DIR)/tests/mock_db_backend
+	@echo "🛠️ Running TEST Migration (Mock Models)..."
+	@mkdir -p $(CACHE_DIR)/models
+	@DB_BACKEND=$$(cat $(CACHE_DIR)/tests/mock_db_backend 2>/dev/null || echo "postgres"); \
+	if [ "$$DB_BACKEND" = "sqlite" ]; then \
+		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
+		MD_SRC="$(MODEL_DIR)/SQLite/Models.c"; \
+	else \
+		DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
+		MD_SRC="$(MODEL_DIR)/PostgreSQL/Models.c"; \
+	fi; \
+	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/test_migrate \
+		$$MD_SRC $(TEST_DIR)/mock_config.c $$DB_SRC $(TEST_DIR)/mock_models.c -lpq || exit 1; \
+	./$(CACHE_DIR)/models/test_migrate || exit 1;
+	@echo "✅ Test Migration finished. Mock models generated."
+
+.PHONY: test
+test: test_migrate $(TEST_BUILD_DIR)
+	@echo "🧪 Starting Test Suite..."
+	@DB_BACKEND=$$(cat $(CACHE_DIR)/db_backend 2>/dev/null); \
+	if [ "$$DB_BACKEND" = "sqlite" ]; then \
+		DB_FILES="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
+		DB_LIBS=""; \
+	else \
+		DB_FILES="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
+		DB_LIBS="-lpq"; \
+	fi; \
+	T_CFLAGS="$(CFLAGS) -I$(UNITY_ROOT) -DUNIT_TEST"; \
+	T_LIBS="-lpthread -ldl $$DB_LIBS"; \
+	for test_file in $(TEST_FILES); do \
+		test_name=$$(basename $$test_file .c); \
+		echo "\n--------------------------------------------------"; \
+		echo "🛠️  Compiling $$test_name..."; \
+		GEN_MODELS=$$(ls $(CACHE_DIR)/models/*.c 2>/dev/null || true); \
+		$(CC) $$T_CFLAGS $(UNITY_ROOT)/unity.c $(TEST_DIR)/mock_config.c \
+			$$GEN_MODELS $$DB_FILES $$test_file \
+			-o $(TEST_BUILD_DIR)/$$test_name $$T_LIBS || exit 1; \
+		echo "🚀 Running $$test_name..."; \
+		$(TEST_BUILD_DIR)/$$test_name || exit 1; \
+	done; \
+	echo "\n✅ All tests passed!"
+
+# ------------------------------------------------------------
 # Clean
 # ------------------------------------------------------------
 
@@ -140,3 +209,8 @@ full_clean:
 	rm -rf $(CACHE_DIR)
 	rm -f GeneratedModels.h
 
+.PHONY: clean_test
+clean_test:
+	@rm -rf $(TEST_BUILD_DIR)
+	@rm -rf $(CACHE_DIR)/tests
+	@rm -f test.db 

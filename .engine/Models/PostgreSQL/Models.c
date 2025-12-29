@@ -115,13 +115,14 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    for (int i = 0; i < m->num_fields; i++) {
+    int create_start = m->has_explicit_pk ? 0 : 1;
+    for (int i = create_start; i < m->num_fields; i++) {
         fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc, ") VALUES (");
 
-    for (int i = 0; i < m->num_fields; i++) {
+    for (int i = create_start; i < m->num_fields; i++) {
         if (m->fields[i].type == TYPE_BOOL) fprintf(fc, "%%s");
         else if (m->fields[i].type == TYPE_INT) fprintf(fc, "%%d");
         else if (m->fields[i].type == TYPE_FLOAT) fprintf(fc, "%%f");
@@ -131,7 +132,7 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc, ")\", ");
 
-    for (int i = 0; i < m->num_fields; i++) {
+    for (int i = create_start; i < m->num_fields; i++) {
         if (m->fields[i].type == TYPE_BOOL)
             fprintf(fc, "obj->%s ? \"true\" : \"false\"", m->fields[i].name);
         else
@@ -695,6 +696,8 @@ void model(
     int auto_id = (primary_key == NULL);
     m->num_fields = num_fields + 1;
     m->fields = malloc(sizeof(Field) * m->num_fields);
+
+    m->has_explicit_pk = (primary_key != NULL);
 
     if (auto_id) {
         m->fields[0].type = TYPE_INT;
