@@ -6,12 +6,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-void home(HTTPRequest *request) {
+void wait(HTTPRequest *request, Database *db) {
+    (void)db;
+    sleep(120);
+    const char *body = "<h1>Waited for 30 secconds successfully</h1>";
+    HTTPServer_send_response(request, body, "", 500, "");
+}
+
+void home(HTTPRequest *request, Database *db) {
+    (void)db;
     render_html(request, "home.html", NULL, 0);
 }
 
-void create_user_view(HTTPRequest *request) {
-
+void create_user_view(HTTPRequest *request, Database *db) {
     // ---- Create test user ----
     User u = {
         .DNI = "1",
@@ -70,7 +77,8 @@ void create_user_view(HTTPRequest *request) {
     }
 }
 
-void example(HTTPRequest *request) {
+void example(HTTPRequest *request, Database *db) {
+    (void)db;
     // Create a struct to hold profile information
         char name[100] = "";
 		snprintf(name, sizeof(name), (1)?"Pau Batet Castells":"Someone else");

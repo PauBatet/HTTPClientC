@@ -1,5 +1,4 @@
 #include "HTTPFramework.h"
-#include "Database/Database.h"
 #include "Routing/Routing.h"
 #include <stdio.h>
 #include <string.h>
@@ -24,10 +23,13 @@ typedef struct {
     bool stop; // Signal to stop the threads
 } RequestQueue;
 
+typedef struct {
+    int thread_id;
+} WorkerContext;
+
 // Global request queue
 RequestQueue queue;
 HTTPServer *server;
-Database *db;
 
 // Initialize the request queue
 void init_queue(RequestQueue *q) {
@@ -56,7 +58,6 @@ void enqueue(RequestQueue *q, HTTPRequest *request) {
     }
     q->rear = node;
 
-    printf("Request enqueued: %s %s\n", request->method, request->path);
     pthread_cond_signal(&q->cond); // Signal a worker thread
     pthread_mutex_unlock(&q->mutex);
 }
@@ -83,7 +84,6 @@ bool dequeue(RequestQueue *q, HTTPRequest *request) {
     }
 
     free(node);
-    printf("Request dequeued: %s %s\n", request->method, request->path);
     pthread_mutex_unlock(&q->mutex);
     return true;
 }
@@ -107,9 +107,7 @@ void destroy_queue(RequestQueue *q) {
 }
 
 // Handle a single request
-void handle_request(HTTPRequest *request) {
-    printf("Processing request: %s %s\n", request->method, request->path);
-
+void handle_request(HTTPRequest *request, Database *db) {
     for (int i = 0; routes[i].path != NULL; i++) {
         if (route_match(routes[i].path, request->path, request)) {
             // ---- Print query params ----
@@ -130,7 +128,7 @@ void handle_request(HTTPRequest *request) {
                         request->header_list[j].value ? request->header_list[j].value : "(null)");
                 }
             }
-            routes[i].handler(request);
+            routes[i].handler(request, db);
             return;
         }
     }
@@ -139,16 +137,27 @@ void handle_request(HTTPRequest *request) {
 
 // Worker thread function
 void *worker_thread(void *arg) {
-    (void)arg; // Mark parameter as unused to suppress warnings
+    WorkerContext *ctx = (WorkerContext *)arg;
+    int tid = ctx->thread_id;
+    Database *thread_db;
+    if (!db_open(&thread_db)) {
+        fprintf(stderr, "[thread %d] Failed to open DB\n", tid);
+        return NULL;
+    }
+    printf("[thread %d] started\n", tid);
 
     while (true) {
         HTTPRequest request;
         if (!dequeue(&queue, &request)) {
-            break; // Stop signal received
+            break;
         }
-        handle_request(&request);
+        printf("[thread %d] handling %s %s\n", tid, request.method, request.path);
+        handle_request(&request, thread_db);
+        printf("[thread %d] finished %s %s\n", tid, request.method, request.path);
         HTTPRequest_free(&request);
     }
+    printf("[thread %d] Closing Database Connection and exiting\n", tid);
+    db_close(thread_db);
     return NULL;
 }
 
@@ -156,21 +165,10 @@ void *worker_thread(void *arg) {
 void signal_handler(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
         destroy_queue(&queue);
-        printf("\nClosing Database...\n");
-        db_close(db);
         printf("Shutting down server...\n");
         HTTPServer_destroy(server);
         exit(0);
     }
-}
-
-void init_db() {
-    //Open Database
-    if (!db_open(&db)) {
-        printf("Failed to open database\n");
-        return;
-    }
-    return;
 }
 
 int run_worker() {
@@ -184,15 +182,15 @@ int run_worker() {
         return 1;
     }
 
-    init_db();
-
     // Initialize the request queue
     init_queue(&queue);
 
     // Create a pool of worker threads
     pthread_t workers[NUM_WORKERS];
+    WorkerContext contexts[NUM_WORKERS];
     for (int i = 0; i < NUM_WORKERS; i++) {
-        pthread_create(&workers[i], NULL, worker_thread, NULL);
+        contexts[i].thread_id = i;
+        pthread_create(&workers[i], NULL, worker_thread, &contexts[i]);
     }
 
     // Listening loop
@@ -204,14 +202,11 @@ int run_worker() {
             HTTPRequest_free(&request);
             continue;
         }
-
-        printf("New request received: %s %s\n", request.method, request.path);
         enqueue(&queue, &request);
     }
 
     // Cleanup (should not be reached but just in case)
     destroy_queue(&queue);
-    db_close(db);
     HTTPServer_destroy(server);
 
     for (int i = 0; i < NUM_WORKERS; i++) {
