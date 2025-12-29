@@ -8,6 +8,7 @@
 
 struct Database {
     sqlite3 *conn;
+    int tx_depth;
 };
 
 struct DBResult {

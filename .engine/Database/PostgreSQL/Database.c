@@ -27,7 +27,7 @@ bool db_open(Database **db) {
              "host=%s port=%d dbname=%s user=%s password=%s",
              PG_HOST, PG_PORT, PG_DBNAME, PG_USER, PG_PASSWORD);
 
-  (*db)->tx_depth = 0;
+    (*db)->tx_depth = 0;
     (*db)->conn = PQconnectdb(conninfo);
     if (PQstatus((*db)->conn) != CONNECTION_OK) {
         fprintf(stderr, "Connection to database failed: %s\n", PQerrorMessage((*db)->conn));
@@ -176,3 +176,4 @@ bool db_rollback(Database *db)
         return db_exec(db, sql);
     }
 }
+

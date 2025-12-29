@@ -182,7 +182,6 @@ int run_worker() {
         return 1;
     }
 
-
     // Initialize the request queue
     init_queue(&queue);
 
