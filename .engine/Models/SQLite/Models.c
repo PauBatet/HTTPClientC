@@ -261,10 +261,10 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
-    fprintf(fc, " FROM \\\"%s\\\" WHERE %s = ", m->name, m->fields[0].name);
+    fprintf(fc, " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ", m->name, m->fields[0].name);
 
     if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
     else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
@@ -304,7 +304,7 @@ static void generate_crud_files(Model *m) {
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "%s%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
     }
 
     fprintf(fc,
