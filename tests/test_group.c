@@ -29,7 +29,7 @@ void test_Group_Individual_Operations(void) {
     char query_buf[128];
     sprintf(query_buf, "\"name\" = '%s'", unique_name);
     
-    TEST_ASSERT_TRUE(Group_query(test_db, query_buf, &search_results));
+    TEST_ASSERT_TRUE(Group_query_unsafe(test_db, query_buf, &search_results));
     TEST_ASSERT_TRUE_MESSAGE(search_results.count > 0, "Could not find the created group by name");
     
     // 3. Grab the ID assigned by Postgres
@@ -64,7 +64,7 @@ void test_Group_Bulk_And_Query_Operations(void) {
     GroupList pre_check = {0};
     char where_clause[128];
     sprintf(where_clause, "\"name\" LIKE 'Batch_%s_%%'", batch_tag);
-    Group_query(test_db, where_clause, &pre_check);
+    Group_query_unsafe(test_db, where_clause, &pre_check);
     size_t overlapping_data = pre_check.count;
     GroupList_free(&pre_check);
 
@@ -82,7 +82,7 @@ void test_Group_Bulk_And_Query_Operations(void) {
 
     // 3. Query ONLY the items from THIS batch
     GroupList query_res = {0};
-    TEST_ASSERT_TRUE(Group_query(test_db, where_clause, &query_res));
+    TEST_ASSERT_TRUE(Group_query_unsafe(test_db, where_clause, &query_res));
     
     // We expect exactly 10 + whatever was there (which should be 10 if overlapping_data is 0)
     TEST_ASSERT_EQUAL_INT(10 + overlapping_data, query_res.count);

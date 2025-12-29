@@ -23,7 +23,7 @@ void setUp(void) {
     GroupList gl = {0};
     char q[128];
     sprintf(q, "\"name\" = '%s'", g_name);
-    Group_query(test_db, q, &gl);
+    Group_query_unsafe(test_db, q, &gl);
     if (gl.count > 0) shared_group_id = gl.items[0].id;
 
     Group_free(&g);
@@ -92,7 +92,7 @@ void test_User_Bulk_Operations(void) {
     UserList results = {0};
     char where[128];
     sprintf(where, "\"DNI\" LIKE 'DNI_%s_%%'", batch_tag);
-    TEST_ASSERT_TRUE_MESSAGE(User_query(test_db, where, &results), "User_query failed");
+    TEST_ASSERT_TRUE_MESSAGE(User_query_unsafe(test_db, where, &results), "User_query failed");
     TEST_ASSERT_EQUAL_INT(5, results.count);
 
     // 3. DELETE MANY
