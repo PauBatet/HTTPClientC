@@ -171,15 +171,6 @@ void signal_handler(int sig) {
     }
 }
 
-void init_db() {
-    //Open Database
-    if (!db_open(&db)) {
-        printf("Failed to open database\n");
-        return;
-    }
-    return;
-}
-
 int run_worker() {
     // Set up signal handling
     signal(SIGINT, signal_handler);
@@ -190,8 +181,6 @@ int run_worker() {
         printf("Failed to create server\n");
         return 1;
     }
-
-    init_db();
 
     // Initialize the request queue
     init_queue(&queue);
