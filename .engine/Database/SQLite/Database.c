@@ -13,6 +13,7 @@ struct Database {
 
 struct DBResult {
     sqlite3_stmt *stmt;
+    int current_row;
 };
 
 bool db_open(Database **db) {
@@ -56,6 +57,58 @@ bool db_query(Database *db, const char *sql, DBResult **out) {
     *out = r;
     return true;
 }
+
+/* --------------- SQL Injection safe functions ---------------------- */
+
+bool db_exec_params(Database *db, const char *sql, int nparams, const char *params[]) {
+    if (!db) return false;
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->conn, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        fprintf(stderr, "SQL prepare error: %s\nSQL: %s\n", sqlite3_errmsg(db->conn), sql);
+        return false;
+    }
+
+    for (int i = 0; i < nparams; i++) {
+        sqlite3_bind_text(stmt, i + 1, params[i], -1, SQLITE_TRANSIENT);
+    }
+
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "SQL exec error: %s\nSQL: %s\n", sqlite3_errmsg(db->conn), sql);
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+bool db_query_params(Database *db, const char *sql, int nparams, const char *params[], DBResult **out) {
+    if (!db || !out) return false;
+
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db->conn, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        fprintf(stderr, "SQL prepare error: %s\nSQL: %s\n", sqlite3_errmsg(db->conn), sql);
+        return false;
+    }
+
+    for (int i = 0; i < nparams; i++) {
+        sqlite3_bind_text(stmt, i + 1, params[i], -1, SQLITE_TRANSIENT);
+    }
+
+    DBResult *r = malloc(sizeof(DBResult));
+    if (!r) {
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    r->stmt = stmt;
+    r->current_row = -1;
+    *out = r;
+    return true;
+}
+
+/* -------------------- Helper functions ---------------------------- */
 
 bool db_result_next(DBResult *r) {
     return sqlite3_step(r->stmt) == SQLITE_ROW;

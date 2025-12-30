@@ -23,7 +23,7 @@ void setUp(void) {
     GroupList gl = {0};
     char q[128];
     sprintf(q, "\"name\" = '%s'", g_name);
-    Group_query(test_db, q, &gl);
+    Group_query_unsafe(test_db, q, &gl);
     if (gl.count > 0) shared_group_id = gl.items[0].id;
 
     Group_free(&g);
@@ -92,7 +92,7 @@ void test_User_Bulk_Operations(void) {
     UserList results = {0};
     char where[128];
     sprintf(where, "\"DNI\" LIKE 'DNI_%s_%%'", batch_tag);
-    TEST_ASSERT_TRUE_MESSAGE(User_query(test_db, where, &results), "User_query failed");
+    TEST_ASSERT_TRUE_MESSAGE(User_query_unsafe(test_db, where, &results), "User_query failed");
     TEST_ASSERT_EQUAL_INT(5, results.count);
 
     // 3. DELETE MANY
@@ -102,10 +102,43 @@ void test_User_Bulk_Operations(void) {
     UserList_free(&results);
 }
 
+void test_User_DNI_Uniqueness(void) {
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(0, shared_group_id, "Setup failed to create parent group");
+
+    char dni[32];
+    sprintf(dni, "DNI_UNIQUE_%d", rand() % 100000);
+
+    // 1. Create first user
+    User u1 = {
+        .DNI = strdup(dni),
+        .name = strdup("First User"),
+        .age = 30,
+        .email = strdup("first@example.com"),
+        .group_id = shared_group_id
+    };
+    TEST_ASSERT_TRUE_MESSAGE(User_create(test_db, &u1), "User_create u1 failed");
+
+    // 2. Try to create second user with same DNI
+    User u2 = {
+        .DNI = strdup(dni),
+        .name = strdup("Second User"),
+        .age = 25,
+        .email = strdup("second@example.com"),
+        .group_id = shared_group_id
+    };
+    TEST_ASSERT_FALSE_MESSAGE(User_create(test_db, &u2), "User_create allowed duplicate DNI");
+
+    // 3. Cleanup
+    TEST_ASSERT_TRUE_MESSAGE(User_delete(test_db, dni), "User_delete failed");
+    User_free(&u1);
+    User_free(&u2);
+}
+
 int main(void) {
     srand(time(NULL));
     UNITY_BEGIN();
     RUN_TEST(test_User_Individual_CRUD);
     RUN_TEST(test_User_Bulk_Operations);
+    RUN_TEST(test_User_DNI_Uniqueness);
     return UNITY_END();
 }

@@ -4,8 +4,6 @@
 typedef struct Database Database;
 typedef struct DBResult DBResult;
 
-extern Database *db;
-
 /* Lifecycle */
 bool db_open(Database **db);
 void db_close(Database *db);
@@ -32,3 +30,7 @@ void db_result_free(DBResult *r);
 bool db_exec_safe(Database *db, const char *sql); 
 
 bool db_query_safe(Database *db, const char *sql, DBResult **r);
+
+bool db_exec_params(Database *db, const char *sql, int nparams, const char *params[]);
+
+bool db_query_params(Database *db, const char *sql, int nparams, const char *params[], DBResult **out);

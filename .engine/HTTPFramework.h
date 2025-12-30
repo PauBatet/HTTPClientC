@@ -3,6 +3,7 @@
 
 #include"HTMLTemplating.h"
 #include"Database/Database.h"
+
 typedef struct {
 	const char *path;
 	void (*handler)(HTTPRequest *request, Database *db);

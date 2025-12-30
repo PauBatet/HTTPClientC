@@ -72,28 +72,40 @@ static void generate_crud_files(Model *m) {
     fprintf(fh,
         "bool %s_create(Database *db, %s *obj);\n"
         "bool %s_create_many(Database *db, %sList *list);\n\n"
+
         "bool %s_read(Database *db, %s %s, %s *obj);\n"
+
+        "bool %s_read_all(Database *db, %sList *out);\n"
+
         "bool %s_update(Database *db, %s *obj);\n"
         "bool %s_update_many(Database *db, %sList *list);\n\n"
-        "bool %s_delete(Database *db, %s %s);\n\n"
+
+        "bool %s_delete(Database *db, %s %s);\n"
         "bool %s_delete_many(Database *db, %sList *list);\n\n"
-        "bool %s_read_all(Database *db, %sList *out);\n"
-        "bool %s_query(Database *db, const char *where, %sList *out);\n\n"
+
+        "bool %s_query_unsafe(Database *db, const char *where, %sList *out);\n\n"
+
         "void %s_free(%s *obj);\n"
         "void %sList_free(%sList *list);\n",
-        m->name, m->name,
-        m->name, m->name,
-        m->name, pk_ctype, m->fields[0].name, m->name,
-        m->name, m->name,
-        m->name, m->name,
-        m->name, pk_ctype, m->fields[0].name,
-        m->name, m->name,
-        m->name, m->name,
-        m->name, m->name,
-        m->name, m->name,
-        m->name, m->name
-    );
 
+        m->name, m->name,                    // create
+        m->name, m->name,                    // create_many
+
+        m->name, pk_ctype, m->fields[0].name, m->name, // read
+
+        m->name, m->name,                    // read_all
+
+        m->name, m->name,                    // update
+        m->name, m->name,                    // update_many
+
+        m->name, pk_ctype, m->fields[0].name,// delete
+        m->name, m->name,                    // delete_many
+
+        m->name, m->name,                    // query_unsafe
+
+        m->name, m->name,                    // free
+        m->name, m->name                     // List_free    
+    );
     fclose(fh);
 
     // --- C file ---
@@ -106,37 +118,73 @@ static void generate_crud_files(Model *m) {
         path_h
     );
 
-    // CREATE
+   /* CREATE */
     fprintf(fc,
         "bool %s_create(Database *db, %s *obj) {\n"
-        "    char sql[1024];\n"
-        "    snprintf(sql, sizeof(sql), \"INSERT INTO \\\"%s\\\" (",
-        m->name, m->name, m->name
+        "    const char *params[%d];\n",
+        m->name, m->name,
+        m->num_fields - (m->has_explicit_pk ? 0 : 1)
     );
 
     int create_start = m->has_explicit_pk ? 0 : 1;
+
+    for (int i = create_start, p = 0; i < m->num_fields; i++, p++) {
+        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL) {
+            fprintf(fc,
+                "    char param_%s[32]; snprintf(param_%s, sizeof(param_%s), \"%%d\", obj->%s);\n"
+                "    params[%d] = param_%s;\n",
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                p,
+                m->fields[i].name
+            );
+        } else if (m->fields[i].type == TYPE_FLOAT) {
+            fprintf(fc,
+                "    char param_%s[64]; snprintf(param_%s, sizeof(param_%s), \"%%f\", obj->%s);\n"
+                "    params[%d] = param_%s;\n",
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                p,
+                m->fields[i].name
+            );
+        } else {
+            fprintf(fc,
+                "    params[%d] = obj->%s;\n",
+                p, m->fields[i].name
+            );
+        }
+    }
+
+    fprintf(fc,
+        "    const char *sql = \"INSERT INTO \\\"%s\\\" (",
+        m->name
+    );
+
     for (int i = create_start; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s",
+            m->fields[i].name,
+            i < m->num_fields - 1 ? ", " : ""
+        );
     }
 
     fprintf(fc, ") VALUES (");
 
-    for (int i = create_start; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL) fprintf(fc, "%%d");
-        else if (m->fields[i].type == TYPE_FLOAT) fprintf(fc, "%%f");
-        else fprintf(fc, "'%%s'");
-        if (i < m->num_fields - 1) fprintf(fc, ", ");
+    for (int i = create_start, p = 1; i < m->num_fields; i++, p++) {
+        fprintf(fc, "?%d%s", p, i < m->num_fields - 1 ? ", " : "");
     }
 
-    fprintf(fc, ")\"");
+    fprintf(fc,
+        ")\";\n"
+        "    return db_exec_params(db, sql, %d, params);\n"
+        "}\n\n",
+        m->num_fields - create_start
+    );
 
-    for (int i = create_start; i < m->num_fields; i++) {
-        fprintf(fc, ", obj->%s", m->fields[i].name);
-    }
-
-    fprintf(fc, ");\n    return db_exec(db, sql);\n}\n\n");
-
-    // CREATE MANY
+    /* CREATE MANY */
     fprintf(fc,
         "bool %s_create_many(Database *db, %sList *list) {\n"
         "    if (!db_exec(db, \"BEGIN\")) return false;\n"
@@ -151,33 +199,58 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    // READ
+    /* READ */
     fprintf(fc,
         "bool %s_read(Database *db, %s %s, %s *obj) {\n"
         "    %s_free(obj);\n"
         "    memset(obj, 0, sizeof(*obj));\n"
         "    DBResult *r;\n"
-        "    char sql[512];\n"
-        "    snprintf(sql, sizeof(sql), \"SELECT ",
-        m->name, pk_ctype, m->fields[0].name, m->name, m->name
+        "    const char *params[1];\n",
+        m->name,
+        pk_ctype,
+        m->fields[0].name,
+        m->name,
+        m->name
+    );
+
+    /* PK param */
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) {
+        fprintf(fc,
+            "    char pk_buf[32]; snprintf(pk_buf, sizeof(pk_buf), \"%%d\", %s);\n"
+            "    params[0] = pk_buf;\n",
+            m->fields[0].name
+        );
+    } else if (m->fields[0].type == TYPE_FLOAT) {
+        fprintf(fc,
+            "    char pk_buf[64]; snprintf(pk_buf, sizeof(pk_buf), \"%%f\", %s);\n"
+            "    params[0] = pk_buf;\n",
+            m->fields[0].name
+        );
+    } else {
+        fprintf(fc,
+            "    params[0] = %s;\n",
+            m->fields[0].name
+        );
+    }
+
+    fprintf(fc,
+        "    const char *sql = \"SELECT "
     );
 
     for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
+        fprintf(fc, "\\\"%s\\\"%s",
+            m->fields[i].name,
+            i < m->num_fields - 1 ? ", " : ""
+        );
     }
 
-    fprintf(fc, " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ", m->name, m->fields[0].name);
-
-    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
-    else fprintf(fc, "'%%s'");
-
-    fprintf(fc, "\", %s);\n", m->fields[0].name);
-
     fprintf(fc,
-        "   if (!db_query(db, sql, &r)) return false;\n"
-        "   bool ok = false;\n"
-        "   if (db_result_next(r)) {\n"
+        " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ?1\";\n"
+        "    if (!db_query_params(db, sql, 1, params, &r)) return false;\n"
+        "    bool ok = false;\n"
+        "    if (db_result_next(r)) {\n",
+        m->name,
+        m->fields[0].name
     );
 
     for (int i = 0; i < m->num_fields; i++) {
@@ -197,7 +270,7 @@ static void generate_crud_files(Model *m) {
         "}\n\n"
     );
 
-    // READ_ALL
+    /* READ_ALL */
     fprintf(fc,
         "bool %s_read_all(Database *db, %sList *out) {\n"
         "    DBResult *r;\n"
@@ -249,107 +322,10 @@ static void generate_crud_files(Model *m) {
         "}\n\n"
     );
 
-    // READ FOR UPDATE
+    /* QUERY */
     fprintf(fc,
-        "bool %s_read_for_update(Database *db, %s %s, %s *obj) {\n"
-        "    %s_free(obj);\n"
-        "    memset(obj, 0, sizeof(*obj));\n"
-        "    DBResult *r;\n"
-        "    char sql[512];\n"
-        "    snprintf(sql, sizeof(sql), \"SELECT ",
-        m->name, pk_ctype, m->fields[0].name, m->name, m->name
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
-    }
-
-    fprintf(fc, " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ", m->name, m->fields[0].name);
-
-    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
-    else fprintf(fc, "'%%s'");
-
-    fprintf(fc, "FOR UPDATE \", %s);\n", m->fields[0].name);
-
-    fprintf(fc,
-        "if (!db_query(db, sql, &r)) return false;\n"
-        "bool ok = false;\n"
-        "if (db_result_next(r)) {\n"
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
-        else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
-        else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
-    }
-
-    fprintf(fc,
-        "        ok = true;\n"
-        "    }\n"
-        "    db_result_free(r);\n"
-        "    return ok;\n"
-        "}\n\n"
-    );
-
-    // READ ALL FOR UPDATE
-    fprintf(fc,
-        "bool %s_read_all_for_update(Database *db, %sList *out) {\n"
-        "    DBResult *r;\n"
-        "    const char *sql = \"SELECT ",
-        m->name, m->name
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
-    }
-
-    fprintf(fc,
-        " FROM \\\"%s\\\" FOR UPDATE\";\n"
-        "    if (!db_query(db, sql, &r)) return false;\n"
-        "    size_t cap = 8;\n"
-        "    out->count = 0;\n"
-        "    out->items = calloc(cap, sizeof(%s));\n"
-        "    while (db_result_next(r)) {\n"
-        "        if (out->count == cap) {\n"
-        "            cap *= 2;\n"
-        "            void *tmp = realloc(out->items, sizeof(%s) * cap);\n"
-        "            if (!tmp) {\n"
-        "                for (size_t j = 0; j < out->count; j++) %s_free(&out->items[j]);\n"
-        "                free(out->items);\n"
-        "                out->items = NULL;\n"
-        "                out->count = 0;\n"
-        "                db_result_free(r);\n"
-        "                return false;\n"
-        "            }\n"
-        "            out->items = tmp;\n"
-        "        }\n"
-        "        %s *obj = &out->items[out->count++];\n",
-        m->name, m->name, m->name, m->name, m->name
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
-        else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
-        else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
-    }
-
-    fprintf(fc,
-        "    }\n"
-        "    db_result_free(r);\n"
-        "    return true;\n"
-        "}\n\n"
-    );
-
-    // QUERY
-    fprintf(fc,
-        "bool %s_query(Database *db, const char *where, %sList *out) {\n"
+        "/* WARNING: this function is SQL-injection prone. */\n"
+        "bool %s_query_unsafe(Database *db, const char *where, %sList *out) {\n"
         "    char sql[1024];\n"
         "    DBResult *r;\n"
         "    snprintf(sql, sizeof(sql), \"SELECT ",
@@ -400,7 +376,7 @@ static void generate_crud_files(Model *m) {
         "}\n\n"
     );
 
-    // CLEANUP HELPERS
+    /* CLEANUP HELPERS */
     fprintf(fc,
         "void %s_free(%s *obj) {\n",
         m->name, m->name
@@ -426,36 +402,86 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    // UPDATE
+    /* UPDATE */
     fprintf(fc,
         "bool %s_update(Database *db, %s *obj) {\n"
-        "    char sql[1024];\n"
-        "    snprintf(sql, sizeof(sql), \"UPDATE \\\"%s\\\" SET ",
-        m->name, m->name, m->name
+        "    const char *params[%d];\n",
+        m->name, m->name, m->num_fields
     );
 
-    for (int i = 0; i < m->num_fields; i++) {
-        if (i == 0) continue;
-        fprintf(fc, "%s=", m->fields[i].name);
-        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL) fprintf(fc, "%%d");
-        else if (m->fields[i].type == TYPE_FLOAT) fprintf(fc, "%%f");
-        else fprintf(fc, "'%%s'");
-        if (i < m->num_fields - 1) fprintf(fc, ", ");
+    for (int i = 1, p = 0; i < m->num_fields; i++, p++) {
+        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL) {
+            fprintf(fc,
+                "    char param_%s[32]; snprintf(param_%s, sizeof(param_%s), \"%%d\", obj->%s);\n"
+                "    params[%d] = param_%s;\n",
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                p,
+                m->fields[i].name
+            );
+        } else if (m->fields[i].type == TYPE_FLOAT) {
+            fprintf(fc,
+                "    char param_%s[64]; snprintf(param_%s, sizeof(param_%s), \"%%f\", obj->%s);\n"
+                "    params[%d] = param_%s;\n",
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                m->fields[i].name,
+                p,
+                m->fields[i].name
+            );
+        } else {
+            fprintf(fc, "    params[%d] = obj->%s;\n", p, m->fields[i].name);
+        }
     }
 
-    fprintf(fc, " WHERE \\\"%s\\\" = ", m->fields[0].name);
-    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
-    else fprintf(fc, "'%%s'");
-    fprintf(fc, "\", ");
-    for (int i = 1; i < m->num_fields; i++) {
-        fprintf(fc, "obj->%s", m->fields[i].name);
-        if (i < m->num_fields - 1) fprintf(fc, ", ");
+    /* PK param */
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) {
+        fprintf(fc,
+            "    char pk_buf[32]; snprintf(pk_buf, sizeof(pk_buf), \"%%d\", obj->%s);\n"
+            "    params[%d] = pk_buf;\n",
+            m->fields[0].name,
+            m->num_fields - 1
+        );
+    } else if (m->fields[0].type == TYPE_FLOAT) {
+        fprintf(fc,
+            "    char pk_buf[64]; snprintf(pk_buf, sizeof(pk_buf), \"%%f\", obj->%s);\n"
+            "    params[%d] = pk_buf;\n",
+            m->fields[0].name,
+            m->num_fields - 1
+        );
+    } else {
+        fprintf(fc,
+            "    params[%d] = obj->%s;\n",
+            m->num_fields - 1,
+            m->fields[0].name
+        );
     }
-    fprintf(fc, ", obj->%s);\n", m->fields[0].name);
-    fprintf(fc, "    return db_exec(db, sql);\n}\n\n");
 
-    //UPDETE MANY
+    fprintf(fc,
+        "    const char *sql = \"UPDATE \\\"%s\\\" SET ",
+        m->name
+    );
+
+    for (int i = 1, p = 1; i < m->num_fields; i++, p++) {
+        fprintf(fc, "\\\"%s\\\" = ?%d%s",
+                m->fields[i].name,
+                p,
+                i < m->num_fields - 1 ? ", " : "");
+    }
+
+    fprintf(fc,
+        " WHERE \\\"%s\\\" = ?%d\";\n"
+        "    return db_exec_params(db, sql, %d, params);\n"
+        "}\n\n",
+        m->fields[0].name,
+        m->num_fields,
+        m->num_fields
+    );
+
+    /* UPDATE MANY */
     fprintf(fc,
         "bool %s_update_many(Database *db, %sList *list) {\n"
         "    if (!db_exec(db, \"BEGIN\")) return false;\n"
@@ -470,22 +496,37 @@ static void generate_crud_files(Model *m) {
         m->name, m->name, m->name
     );
 
-    // DELETE
+    /* DELETE */
     fprintf(fc,
         "bool %s_delete(Database *db, %s %s) {\n"
-        "    char sql[256];\n"
-        "    snprintf(sql, sizeof(sql), \"DELETE FROM \\\"%s\\\" WHERE \\\"%s\\\" = ",
-        m->name, pk_ctype, m->fields[0].name, m->name, m->fields[0].name
+        "    const char *params[1];\n",
+        m->name, pk_ctype, m->fields[0].name
     );
 
-    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) fprintf(fc, "%%d");
-    else if (m->fields[0].type == TYPE_FLOAT) fprintf(fc, "%%f");
-    else fprintf(fc, "'%%s'");
-    fprintf(fc, "\", %s);\n", m->fields[0].name);
+    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) {
+        fprintf(fc,
+            "    char pk_buf[32]; snprintf(pk_buf, sizeof(pk_buf), \"%%d\", %s);\n"
+            "    params[0] = pk_buf;\n",
+            m->fields[0].name
+        );
+    } else if (m->fields[0].type == TYPE_FLOAT) {
+        fprintf(fc,
+            "    char pk_buf[64]; snprintf(pk_buf, sizeof(pk_buf), \"%%f\", %s);\n"
+            "    params[0] = pk_buf;\n",
+            m->fields[0].name
+        );
+    } else {
+        fprintf(fc, "    params[0] = %s;\n", m->fields[0].name);
+    }
 
-    fprintf(fc, "    return db_exec(db, sql);\n}\n");
+    fprintf(fc,
+        "    const char *sql = \"DELETE FROM \\\"%s\\\" WHERE \\\"%s\\\" = ?1\";\n"
+        "    return db_exec_params(db, sql, 1, params);\n"
+        "}\n\n",
+        m->name, m->fields[0].name
+    );
 
-    //DELETE MANY
+    /* DELETE MANY */
     fprintf(fc,
         "bool %s_delete_many(Database *db, %sList *list) {\n"
         "    if (!db_exec(db, \"BEGIN\")) return false;\n"
@@ -502,7 +543,6 @@ static void generate_crud_files(Model *m) {
         m->name,
         m->fields[0].name
     );
-
     fclose(fc);
 }
 

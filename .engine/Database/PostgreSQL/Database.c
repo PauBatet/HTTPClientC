@@ -177,3 +177,65 @@ bool db_rollback(Database *db)
     }
 }
 
+bool db_exec_params(Database *db, const char *sql, int nparams, const char *params[]) {
+    if (!db) return false;
+
+    PGresult *res = PQexecParams(
+        db->conn,
+        sql,
+        nparams,
+        NULL,        // let Postgres infer param types
+        params,
+        NULL,        // param lengths (text)
+        NULL,        // param formats (text)
+        0            // result format: text
+    );
+
+    if (!res || PQresultStatus(res) != PGRES_COMMAND_OK) {
+        fprintf(stderr,
+                "SQL exec error: %s\nSQL: %s\n",
+                PQerrorMessage(db->conn),
+                sql);
+        if (res) PQclear(res);
+        return false;
+    }
+
+    PQclear(res);
+    return true;
+}
+
+bool db_query_params(Database *db, const char *sql, int nparams, const char *params[], DBResult **out) {
+    if (!db || !out) return false;
+
+    PGresult *res = PQexecParams(
+        db->conn,
+        sql,
+        nparams,
+        NULL,
+        params,
+        NULL,
+        NULL,
+        0
+    );
+
+    if (!res || PQresultStatus(res) != PGRES_TUPLES_OK) {
+        fprintf(stderr,
+                "SQL query error: %s\nSQL: %s\n",
+                PQerrorMessage(db->conn),
+                sql);
+        if (res) PQclear(res);
+        return false;
+    }
+
+    DBResult *r = malloc(sizeof(DBResult));
+    if (!r) {
+        PQclear(res);
+        return false;
+    }
+
+    r->res = res;
+    r->current_row = -1;
+    *out = r;
+    return true;
+}
+
