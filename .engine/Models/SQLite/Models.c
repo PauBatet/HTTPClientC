@@ -74,10 +74,8 @@ static void generate_crud_files(Model *m) {
         "bool %s_create_many(Database *db, %sList *list);\n\n"
 
         "bool %s_read(Database *db, %s %s, %s *obj);\n"
-        "bool %s_read_for_update(Database *db, %s %s, %s *obj);\n\n"
 
         "bool %s_read_all(Database *db, %sList *out);\n"
-        "bool %s_read_all_for_update(Database *db, %sList *out);\n\n"
 
         "bool %s_update(Database *db, %s *obj);\n"
         "bool %s_update_many(Database *db, %sList *list);\n\n"
@@ -94,10 +92,8 @@ static void generate_crud_files(Model *m) {
         m->name, m->name,                    // create_many
 
         m->name, pk_ctype, m->fields[0].name, m->name, // read
-        m->name, pk_ctype, m->fields[0].name, m->name, // read_for_update
 
         m->name, m->name,                    // read_all
-        m->name, m->name,                    // read_all_for_update
 
         m->name, m->name,                    // update
         m->name, m->name,                    // update_many
@@ -288,123 +284,6 @@ static void generate_crud_files(Model *m) {
 
     fprintf(fc,
         " FROM \\\"%s\\\"\";\n"
-        "    if (!db_query(db, sql, &r)) return false;\n"
-        "    size_t cap = 8;\n"
-        "    out->count = 0;\n"
-        "    out->items = calloc(cap, sizeof(%s));\n"
-        "    while (db_result_next(r)) {\n"
-        "        if (out->count == cap) {\n"
-        "            cap *= 2;\n"
-        "            void *tmp = realloc(out->items, sizeof(%s) * cap);\n"
-        "            if (!tmp) {\n"
-        "                for (size_t j = 0; j < out->count; j++) %s_free(&out->items[j]);\n"
-        "                free(out->items);\n"
-        "                out->items = NULL;\n"
-        "                out->count = 0;\n"
-        "                db_result_free(r);\n"
-        "                return false;\n"
-        "            }\n"
-        "            out->items = tmp;\n"
-        "        }\n"
-        "        %s *obj = &out->items[out->count++];\n",
-        m->name, m->name, m->name, m->name, m->name
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
-        else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
-        else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
-    }
-
-    fprintf(fc,
-        "    }\n"
-        "    db_result_free(r);\n"
-        "    return true;\n"
-        "}\n\n"
-    );
-
-    /* READ FOR UPDATE */
-    fprintf(fc,
-        "bool %s_read_for_update(Database *db, %s %s, %s *obj) {\n"
-        "    %s_free(obj);\n"
-        "    memset(obj, 0, sizeof(*obj));\n"
-        "    DBResult *r;\n"
-        "    const char *params[1];\n",
-        m->name, pk_ctype, m->fields[0].name, m->name, m->name
-    );
-
-    /* PK param */
-    if (m->fields[0].type == TYPE_INT || m->fields[0].type == TYPE_BOOL) {
-        fprintf(fc,
-            "    char pk_buf[32]; snprintf(pk_buf, sizeof(pk_buf), \"%%d\", %s);\n"
-            "    params[0] = pk_buf;\n",
-            m->fields[0].name
-        );
-    } else if (m->fields[0].type == TYPE_FLOAT) {
-        fprintf(fc,
-            "    char pk_buf[64]; snprintf(pk_buf, sizeof(pk_buf), \"%%f\", %s);\n"
-            "    params[0] = pk_buf;\n",
-            m->fields[0].name
-        );
-    } else {
-        fprintf(fc,
-            "    params[0] = %s;\n",
-            m->fields[0].name
-        );
-    }
-
-    fprintf(fc,
-        "    const char *sql = \"SELECT "
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s",
-                m->fields[i].name,
-                i < m->num_fields - 1 ? ", " : "");
-    }
-
-    fprintf(fc,
-        " FROM \\\"%s\\\" WHERE \\\"%s\\\" = ?1 FOR UPDATE\";\n"
-        "    if (!db_query_params(db, sql, 1, params, &r)) return false;\n"
-        "    bool ok = false;\n"
-        "    if (db_result_next(r)) {\n",
-        m->name, m->fields[0].name
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        if (m->fields[i].type == TYPE_INT || m->fields[i].type == TYPE_BOOL)
-            fprintf(fc, "        obj->%s = db_result_int(r, %d);\n", m->fields[i].name, i);
-        else if (m->fields[i].type == TYPE_FLOAT)
-            fprintf(fc, "        obj->%s = db_result_double(r, %d);\n", m->fields[i].name, i);
-        else
-            fprintf(fc, "        obj->%s = db_result_string(r, %d);\n", m->fields[i].name, i);
-    }
-
-    fprintf(fc,
-        "        ok = true;\n"
-        "    }\n"
-        "    db_result_free(r);\n"
-        "    return ok;\n"
-        "}\n\n"
-    );
-
-    /* READ ALL FOR UPDATE */
-    fprintf(fc,
-        "bool %s_read_all_for_update(Database *db, %sList *out) {\n"
-        "    DBResult *r;\n"
-        "    const char *sql = \"SELECT ",
-        m->name, m->name
-    );
-
-    for (int i = 0; i < m->num_fields; i++) {
-        fprintf(fc, "\\\"%s\\\"%s", m->fields[i].name, i < m->num_fields - 1 ? ", " : "");
-    }
-
-    fprintf(fc,
-        " FROM \\\"%s\\\" FOR UPDATE\";\n"
         "    if (!db_query(db, sql, &r)) return false;\n"
         "    size_t cap = 8;\n"
         "    out->count = 0;\n"

@@ -179,9 +179,11 @@ test: test_migrate $(TEST_BUILD_DIR)
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
 		DB_FILES="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
 		DB_LIBS=""; \
+		BACKEND_CFLAGS="-DDB_BACKEND_SQLITE"; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
 		DB_FILES="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
 		DB_LIBS="-lpq"; \
+		BACKEND_CFLAGS="-DDB_BACKEND_POSTGRES"; \
 	else \
 		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
@@ -192,7 +194,7 @@ test: test_migrate $(TEST_BUILD_DIR)
 		echo "\n--------------------------------------------------"; \
 		echo "🛠️  Compiling $$test_name..."; \
 		GEN_MODELS=$$(ls $(CACHE_DIR)/models/*.c 2>/dev/null || true); \
-		$(CC) $$T_CFLAGS $(UNITY_ROOT)/unity.c $(TEST_DIR)/mock_config.c \
+		$(CC) $$T_CFLAGS $$BACKEND_CFLAGS $(UNITY_ROOT)/unity.c $(TEST_DIR)/mock_config.c \
 			$$GEN_MODELS $$DB_FILES $$test_file \
 			-o $(TEST_BUILD_DIR)/$$test_name $$T_LIBS || exit 1; \
 		echo "🚀 Running $$test_name..."; \
