@@ -5,11 +5,6 @@
 typedef struct Database Database;
 typedef struct DBResult DBResult;
 
-typedef enum {
-    DB_STATUS_OK,
-    DB_STATUS_ERROR
-} DbStatus;
-
 DbStatus db_get_status(Database *db);
 
 /* Lifecycle */

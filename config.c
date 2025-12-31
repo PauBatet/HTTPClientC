@@ -15,7 +15,7 @@ const char *MODEL_PATHS[] = {
 const int NUM_MODEL_DIRS = 1;
 
 // DB backend
-const char *DB_BACKEND = DB_POSTGRES;
+const char *DB_BACKEND = DB_SQLITE;
 
 // PostgreSQL connection info
 char *PG_HOST     = "127.0.0.1"; 

@@ -216,8 +216,6 @@ bool db_rollback(Database *db)
     }
 }
 
-/* -------------------- Parametric Queries -------------------- */
-
 bool db_exec_params(Database *db, const char *sql, int nparams, const char *params[]) {
     if (db_get_status(db) != DB_STATUS_OK) return false;
 
