@@ -1,0 +1,31 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile_postgres_standalone
+    network_mode: "bridge" # <--- Force use of the verified 'docker0' bridge
+    environment:
+      - PG_HOST=192.168.0.104
+      - PG_PORT=5435
+      - PG_DBNAME=appdb
+      - PG_USER=appuser
+      - PG_PASSWORD=apppassword
+      - PG_SSLMODE=disable
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./templates:/app/templates
+    command: sh -c "make full_clean && make migrate && make all && ./.cache/build/server"
+
+  caddy:
+    image: caddy:2-alpine
+    network_mode: "bridge" # <--- Must be the same network as app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+
+volumes:
+  caddy_data:
+  caddy_config:

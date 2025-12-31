@@ -1,0 +1,23 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache \
+    bash coreutils build-base make \
+    libpq-dev postgresql-libs pkgconfig \
+    ca-certificates musl-dev gcompat
+
+WORKDIR /app
+COPY . .
+
+# Pre-create directories
+RUN mkdir -p .cache/build .cache/models
+
+# Set environment for the build phase
+ENV PG_HOST=host.docker.internal
+ENV PG_PORT=5432
+ENV PG_DBNAME=appdb
+ENV PG_USER=appuser
+ENV PG_PASSWORD=apppassword
+
+EXPOSE 8080
+
+CMD sh -c "make full_clean && make migrate && make all && ./.cache/build/server"

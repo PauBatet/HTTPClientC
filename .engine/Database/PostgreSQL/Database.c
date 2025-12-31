@@ -1,5 +1,4 @@
 #include "Database.h"
-#include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,19 +21,28 @@ bool db_open(Database **db) {
     *db = malloc(sizeof(Database));
     if (!*db) return false;
 
-    char conninfo[512];
-    snprintf(conninfo, sizeof(conninfo),
-             "host=%s port=%d dbname=%s user=%s password=%s",
-             PG_HOST, PG_PORT, PG_DBNAME, PG_USER, PG_PASSWORD);
-
-    (*db)->tx_depth = 0;
-    (*db)->conn = PQconnectdb(conninfo);
-    if (PQstatus((*db)->conn) != CONNECTION_OK) {
-        fprintf(stderr, "Connection to database failed: %s\n", PQerrorMessage((*db)->conn));
+    // Safety check: Don't try to connect if HOST is empty
+    if (!PG_HOST || strlen(PG_HOST) == 0) {
+        fprintf(stderr, "Error: PG_HOST is not set!\n");
         free(*db);
         return false;
     }
 
+    char conninfo[1024]; // Increased size to be safe
+    snprintf(conninfo, sizeof(conninfo),
+             "host=%s port=%d dbname=%s user=%s password=%s sslmode=%s",
+             PG_HOST, PG_PORT, PG_DBNAME, PG_USER, PG_PASSWORD, PG_SSLMODE);
+
+    (*db)->tx_depth = 0;
+    (*db)->conn = PQconnectdb(conninfo);
+    
+    if (PQstatus((*db)->conn) != CONNECTION_OK) {
+        fprintf(stderr, "Connection to database failed: %s\n", PQerrorMessage((*db)->conn));
+        PQfinish((*db)->conn); // Clean up the failed connection object
+        free(*db);
+        *db = NULL;
+        return false;
+    }
     return true;
 }
 
@@ -44,14 +52,47 @@ void db_close(Database *db) {
     free(db);
 }
 
+DbStatus db_get_status(Database *db) {
+    if (!db || !db->conn) return DB_STATUS_ERROR;
+    
+    // Check if the connection handle thinks it is okay
+    if (PQstatus(db->conn) != CONNECTION_OK) {
+        return DB_STATUS_ERROR;
+    }
+
+    // Optional: Real-world "ping" to ensure the socket isn't ghosting us
+    PGresult *res = PQexec(db->conn, "SELECT 1");
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        if (res) PQclear(res);
+        return DB_STATUS_ERROR;
+    }
+    PQclear(res);
+    
+    return DB_STATUS_OK;
+}
+
+/* -------------------- Safety Wrapper -------------------- */
+
+// Helper to prevent Segfaults when printing errors on dead connections
+static void log_db_error(Database *db, const char *context) {
+    if (db && db->conn) {
+        fprintf(stderr, "DB Error (%s): %s\n", context, PQerrorMessage(db->conn));
+    } else {
+        fprintf(stderr, "DB Error (%s): Connection is NULL or invalid\n", context);
+    }
+}
+
 /* -------------------- Simple exec -------------------- */
 
-bool db_exec(Database *db, const char *sql)
-{
+bool db_exec(Database *db, const char *sql) {
+    if (db_get_status(db) != DB_STATUS_OK) return false;
+
     PGresult *res = PQexec(db->conn, sql);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK) {
-        fprintf(stderr, "SQL error: %s\nSQL: %s\n", PQerrorMessage(db->conn), sql);
-        PQclear(res);
+    ExecStatusType status = PQresultStatus(res);
+
+    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
+        log_db_error(db, sql);
+        if (res) PQclear(res);
         return false;
     }
     PQclear(res);
@@ -60,10 +101,12 @@ bool db_exec(Database *db, const char *sql)
 
 /* -------------------- Query helpers -------------------- */
 
-bool db_query(Database *db, const char *sql, DBResult **out)
-{
+bool db_query(Database *db, const char *sql, DBResult **out) {
+    if (db_get_status(db) != DB_STATUS_OK || !out) return false;
+
     PGresult *res = PQexec(db->conn, sql);
     if (!res || (PQresultStatus(res) != PGRES_TUPLES_OK && PQresultStatus(res) != PGRES_COMMAND_OK)) {
+        log_db_error(db, sql);
         if (res) PQclear(res);
         return false;
     }
@@ -80,30 +123,26 @@ bool db_query(Database *db, const char *sql, DBResult **out)
     return true;
 }
 
-bool db_result_next(DBResult *r)
-{
-    if (!r) return false;
+bool db_result_next(DBResult *r) {
+    if (!r || !r->res) return false; // Added res check
     r->current_row++;
     return r->current_row < PQntuples(r->res);
 }
 
-int db_result_int(DBResult *r, int col)
-{
-    if (!r) return 0;
+int db_result_int(DBResult *r, int col) {
+    if (!r || !r->res || r->current_row < 0 || r->current_row >= PQntuples(r->res)) return 0;
     char *val = PQgetvalue(r->res, r->current_row, col);
     return val ? atoi(val) : 0;
 }
 
-double db_result_double(DBResult *r, int col)
-{
-    if (!r) return 0.0;
+double db_result_double(DBResult *r, int col) {
+    if (!r || !r->res || r->current_row < 0 || r->current_row >= PQntuples(r->res)) return 0.0;
     char *val = PQgetvalue(r->res, r->current_row, col);
     return val ? atof(val) : 0.0;
 }
 
-char *db_result_string(DBResult *r, int col)
-{
-    if (!r) return NULL;
+char *db_result_string(DBResult *r, int col) {
+    if (!r || !r->res || r->current_row < 0 || r->current_row >= PQntuples(r->res)) return NULL;
     char *val = PQgetvalue(r->res, r->current_row, col);
     return val ? strdup(val) : NULL;
 }
@@ -178,24 +217,12 @@ bool db_rollback(Database *db)
 }
 
 bool db_exec_params(Database *db, const char *sql, int nparams, const char *params[]) {
-    if (!db) return false;
+    if (db_get_status(db) != DB_STATUS_OK) return false;
 
-    PGresult *res = PQexecParams(
-        db->conn,
-        sql,
-        nparams,
-        NULL,        // let Postgres infer param types
-        params,
-        NULL,        // param lengths (text)
-        NULL,        // param formats (text)
-        0            // result format: text
-    );
+    PGresult *res = PQexecParams(db->conn, sql, nparams, NULL, params, NULL, NULL, 0);
 
     if (!res || PQresultStatus(res) != PGRES_COMMAND_OK) {
-        fprintf(stderr,
-                "SQL exec error: %s\nSQL: %s\n",
-                PQerrorMessage(db->conn),
-                sql);
+        log_db_error(db, sql);
         if (res) PQclear(res);
         return false;
     }
@@ -205,24 +232,12 @@ bool db_exec_params(Database *db, const char *sql, int nparams, const char *para
 }
 
 bool db_query_params(Database *db, const char *sql, int nparams, const char *params[], DBResult **out) {
-    if (!db || !out) return false;
+    if (db_get_status(db) != DB_STATUS_OK || !out) return false;
 
-    PGresult *res = PQexecParams(
-        db->conn,
-        sql,
-        nparams,
-        NULL,
-        params,
-        NULL,
-        NULL,
-        0
-    );
+    PGresult *res = PQexecParams(db->conn, sql, nparams, NULL, params, NULL, NULL, 0);
 
     if (!res || PQresultStatus(res) != PGRES_TUPLES_OK) {
-        fprintf(stderr,
-                "SQL query error: %s\nSQL: %s\n",
-                PQerrorMessage(db->conn),
-                sql);
+        log_db_error(db, sql);
         if (res) PQclear(res);
         return false;
     }
@@ -238,4 +253,3 @@ bool db_query_params(Database *db, const char *sql, int nparams, const char *par
     *out = r;
     return true;
 }
-

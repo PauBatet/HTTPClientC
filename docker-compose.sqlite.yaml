@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile_sqlite
+    environment:
+      - SQLITE_PATH=/app/db_data/app.db
+    volumes:
+      - ./templates:/app/templates
+      - ./database_files:/app/db_data  # Maps local folder to container folder
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

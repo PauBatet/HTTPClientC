@@ -1,6 +1,5 @@
 #include "Database.h"
-#include "sqlite3.h"
-#include "config.h"
+#include <sqlite3.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,21 +16,41 @@ struct DBResult {
 };
 
 bool db_open(Database **db) {
+    if (!db) return false;
     *db = malloc(sizeof(Database));
     if (!*db) return false;
-    if (sqlite3_open(SQLITE_PATH, &(*db)->conn) != SQLITE_OK) {
+
+    (*db)->tx_depth = 0;
+    
+    // SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE are standard for app usage
+    int rc = sqlite3_open(SQLITE_PATH, &(*db)->conn);
+    if (rc != SQLITE_OK) {
         fprintf(stderr, "SQLite open failed: %s\n", sqlite3_errmsg((*db)->conn));
+        if ((*db)->conn) sqlite3_close((*db)->conn);
         free(*db);
+        *db = NULL;
         return false;
     }
 
+    // Performance Tuning: Enable WAL mode to prevent locking issues during concurrent reads
+    sqlite3_exec((*db)->conn, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL);
     return true;
 }
 
 void db_close(Database *db) {
     if (!db) return;
-    sqlite3_close(db->conn);
+    if (db->conn) sqlite3_close(db->conn);
     free(db);
+}
+
+DbStatus db_get_status(Database *db) {
+    if (!db || !db->conn) return DB_STATUS_ERROR;
+    
+    // sqlite3_db_readonly returns -1 if handle is invalid/closed
+    if (sqlite3_db_readonly(db->conn, "main") == -1) {
+        return DB_STATUS_ERROR;
+    }
+    return DB_STATUS_OK;
 }
 
 bool db_exec(Database *db, const char *sql) {

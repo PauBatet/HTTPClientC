@@ -1,8 +1,11 @@
 #pragma once
 #include <stdbool.h>
+#include "config.h"
 
 typedef struct Database Database;
 typedef struct DBResult DBResult;
+
+DbStatus db_get_status(Database *db);
 
 /* Lifecycle */
 bool db_open(Database **db);

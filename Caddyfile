@@ -1,0 +1,9 @@
+:80 {
+    reverse_proxy app:8080
+}
+
+# For local HTTPS testing
+:443 {
+    tls internal
+    reverse_proxy app:8080
+}

@@ -1,4 +1,5 @@
 ## Paths
+SHELL                := /bin/bash
 SRC_DIR              := ./
 CACHE_DIR            := $(SRC_DIR).cache
 ENGINE_DIR           := $(SRC_DIR).engine
@@ -14,9 +15,14 @@ $(shell mkdir -p $(CACHE_DIR) $(BUILD_DIR))
 
 # Compiler
 CC     := gcc
+
+LDFLAGS += -Wl,-z,noexecstack
+
 CFLAGS := -Wall -Wextra -g -Wa,--noexecstack \
           -I$(SRC_DIR) -I$(CACHE_DIR) -I$(ENGINE_DIR) \
           -I$(HTML_TEMPLATING_DIR) -I$(HTTP_SERVER_DIR) -I$(DATABASE_DIR) -I$(ROUTING_DIR)
+
+CFLAGS += -I/usr/include/postgresql
 
 # Server sources (core sources compiled at link-time)
 SRCS := $(ENGINE_DIR)/main.c \
@@ -28,9 +34,6 @@ SRCS := $(ENGINE_DIR)/main.c \
 
 TARGET := $(BUILD_DIR)/server
 
-.PHONY: all clean full_clean migrate run
-
-all: $(TARGET)
 
 # ------------------------------------------------------------
 # Utility targets: create cache files from config.c
@@ -40,7 +43,7 @@ all: $(TARGET)
 
 $(CACHE_DIR)/model_paths: $(SRC_DIR)/config.c | $(CACHE_DIR)
 	@echo "Generating model paths from config.c..."
-	@TMP=$$(mktemp /tmp/gen_model_paths.XXXX.c); \
+	@TMP=$$(mktemp -t gen_model_paths.XXXX.c); \
 	printf '%s\n' '#include "config.c"' > $$TMP; \
 	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
 	printf '%s\n' 'int main() { int i=0; while (MODEL_PATHS[i]) { printf("%s\n", MODEL_PATHS[i++]); } return 0; }' >> $$TMP; \
@@ -51,7 +54,7 @@ $(CACHE_DIR)/model_paths: $(SRC_DIR)/config.c | $(CACHE_DIR)
 
 $(CACHE_DIR)/db_backend: $(SRC_DIR)/config.c | $(CACHE_DIR)
 	@echo "Reading DB backend from config.c..."
-	@TMP=$$(mktemp /tmp/gen_db_backend.XXXX.c); \
+	@TMP=$$(mktemp -t gen_db_backend.XXXX.c); \
 	printf '%s\n' '#include "config.c"' > $$TMP; \
 	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
 	printf '%s\n' 'int main() { printf("%s", DB_BACKEND); return 0; }' >> $$TMP; \
@@ -78,8 +81,8 @@ migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
 	echo " DB backend: $$DB_BACKEND"; \
 	echo " Model sources: $$MODEL_SRCS"; \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
-		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
-		DB_LIBS=""; \
+		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c"; \
+		DB_LIBS="-lsqlite3"; \
 		MD_SRC="$(MODEL_DIR)/SQLite/Models.c"; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
 		DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
@@ -89,7 +92,7 @@ migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
 		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/migrate \
-		$$MD_SRC $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS || exit 1; \
+		$$MD_SRC $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS $(LDFLAGS) || exit 1; \
 	./$(CACHE_DIR)/models/migrate || (echo "Migration binary failed"; exit 1); \
 	echo "Migration finished."
 
@@ -112,8 +115,8 @@ $(TARGET):
 		OBJS="$$OBJS $$OBJ"; \
 	done; \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
-		RUNTIME_DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
-		DB_LIBS=""; \
+		RUNTIME_DB_SRC="$(DATABASE_DIR)/SQLite/Database.c"; \
+		DB_LIBS="-lsqlite3"; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
 		RUNTIME_DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
 		DB_LIBS="-lpq"; \
@@ -121,8 +124,12 @@ $(TARGET):
 		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	echo "Linking server with DB backend $$DB_BACKEND ..."; \
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $$RUNTIME_DB_SRC $$OBJS $$DB_LIBS || { echo "Link failed"; exit 1; }; \
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $$RUNTIME_DB_SRC $$OBJS $$DB_LIBS $(LDFLAGS) || { echo "Link failed"; exit 1; }; \
 	echo "Server built: $(TARGET)"
+
+all: $(TARGET)
+	@echo "Making server..."
+	@mkdir -p $(BUILD_DIR)
 
 run: $(TARGET)
 	@echo "Starting server..."
@@ -146,7 +153,7 @@ $(CACHE_DIR)/tests:
 
 $(CACHE_DIR)/tests/mock_db_backend: $(SRC_DIR)/tests/mock_config.c | $(CACHE_DIR)/tests
 	@echo "Reading DB backend from config.c..."
-	@TMP=$$(mktemp /tmp/gen_db_backend.XXXX.c); \
+	@TMP=$$(mktemp -t gen_db_backend.XXXX.c); \
 	printf '%s\n' '#include "tests/mock_config.c"' > $$TMP; \
 	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
 	printf '%s\n' 'int main() { printf("%s", DB_BACKEND); return 0; }' >> $$TMP; \
@@ -159,26 +166,27 @@ $(CACHE_DIR)/tests/mock_db_backend: $(SRC_DIR)/tests/mock_config.c | $(CACHE_DIR
 test_migrate: $(CACHE_DIR)/tests/mock_db_backend
 	@echo "🛠️ Running TEST Migration (Mock Models)..."
 	@mkdir -p $(CACHE_DIR)/models
-	@DB_BACKEND=$$(cat $(CACHE_DIR)/tests/mock_db_backend 2>/dev/null || echo "postgres"); \
+	@DB_BACKEND=$$(cat $(CACHE_DIR)/tests/mock_db_backend 2>/dev/null || echo ""); \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
-		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
+		DB_SRC="$(DATABASE_DIR)/SQLite/Database.c"; \
 		MD_SRC="$(MODEL_DIR)/SQLite/Models.c"; \
+		DB_LIBS="-lsqlite3"; \
 	else \
 		DB_SRC="$(DATABASE_DIR)/PostgreSQL/Database.c"; \
 		MD_SRC="$(MODEL_DIR)/PostgreSQL/Models.c"; \
+		DB_LIBS="-lpq"; \
 	fi; \
 	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/test_migrate \
-		$$MD_SRC $(TEST_DIR)/mock_config.c $$DB_SRC $(TEST_DIR)/mock_models.c -lpq || exit 1; \
+		$$MD_SRC $(TEST_DIR)/mock_config.c $$DB_SRC $(TEST_DIR)/mock_models.c $$DB_LIBS || exit 1; \
 	./$(CACHE_DIR)/models/test_migrate || exit 1;
 	@echo "✅ Test Migration finished. Mock models generated."
-
 .PHONY: test
 test: test_migrate $(TEST_BUILD_DIR)
 	@echo "🧪 Starting Test Suite..."
 	@DB_BACKEND=$$(cat $(CACHE_DIR)/tests/mock_db_backend 2>/dev/null); \
 	if [ "$$DB_BACKEND" = "sqlite" ]; then \
-		DB_FILES="$(DATABASE_DIR)/SQLite/Database.c $(DATABASE_DIR)/SQLite/sqlite3.c"; \
-		DB_LIBS=""; \
+		DB_FILES="$(DATABASE_DIR)/SQLite/Database.c"; \
+		DB_LIBS="-lsqlite3"; \
 		BACKEND_CFLAGS="-DDB_BACKEND_SQLITE"; \
 	elif [ "$$DB_BACKEND" = "postgres" ]; then \
 		DB_FILES="$(DATABASE_DIR)/PostgreSQL/Database.c"; \

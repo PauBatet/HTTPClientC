@@ -18,13 +18,16 @@ extern const char *DB_BACKEND;
 #define DB_POSTGRES "postgres"
 
 // PostgreSQL connection params
-extern const char *PG_HOST;
-extern const int   PG_PORT;
-extern const char *PG_DBNAME;
-extern const char *PG_USER;
-extern const char *PG_PASSWORD;
+extern char *PG_HOST;
+extern int   PG_PORT;
+extern char *PG_DBNAME;
+extern char *PG_USER;
+extern char *PG_PASSWORD;
+extern char *PG_SSLMODE;
 
 // SQLite path
-extern const char *SQLITE_PATH;
+extern char *SQLITE_PATH;
+
+void load_config_from_env();
 
 #endif
