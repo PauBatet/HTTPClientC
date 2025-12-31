@@ -677,6 +677,7 @@ void run_model_definitions(void) {
 }
 
 int main() {
+    load_config_from_env();
     Database *db;
     if (!db_open(&db)) {
         printf("Failed to open database\n");

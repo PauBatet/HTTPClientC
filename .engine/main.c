@@ -139,25 +139,31 @@ void handle_request(HTTPRequest *request, Database *db) {
 void *worker_thread(void *arg) {
     WorkerContext *ctx = (WorkerContext *)arg;
     int tid = ctx->thread_id;
-    Database *thread_db;
-    if (!db_open(&thread_db)) {
-        fprintf(stderr, "[thread %d] Failed to open DB\n", tid);
-        return NULL;
-    }
-    printf("[thread %d] started\n", tid);
+    Database *thread_db = NULL;
 
     while (true) {
         HTTPRequest request;
-        if (!dequeue(&queue, &request)) {
-            break;
+        if (!dequeue(&queue, &request)) break;
+
+        // Check if we need to (re)connect
+        if (db_get_status(thread_db) != DB_STATUS_OK) {
+            if (thread_db) {
+                printf("[thread %d] Connection stale, cleaning up...\n", tid);
+                db_close(thread_db);
+                thread_db = NULL;
+            }
+            printf("[thread %d] Attempting DB connection...\n", tid);
+            if (!db_open(&thread_db)) {
+                fprintf(stderr, "[thread %d] DB is down. 503 Sent.\n", tid);
+                HTTPServer_send_response(&request, "", "", 503, "Service Unavailable");
+                HTTPRequest_free(&request);
+                continue;
+            }
         }
-        printf("[thread %d] handling %s %s\n", tid, request.method, request.path);
         handle_request(&request, thread_db);
-        printf("[thread %d] finished %s %s\n", tid, request.method, request.path);
         HTTPRequest_free(&request);
     }
-    printf("[thread %d] Closing Database Connection and exiting\n", tid);
-    db_close(thread_db);
+    if (thread_db) db_close(thread_db);
     return NULL;
 }
 
@@ -219,7 +225,7 @@ int run_worker() {
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
-
+    load_config_from_env();
     bool in_container = (getpid() == 1);
 
     if (in_container) {

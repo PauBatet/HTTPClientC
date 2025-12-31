@@ -15,6 +15,9 @@ $(shell mkdir -p $(CACHE_DIR) $(BUILD_DIR))
 
 # Compiler
 CC     := gcc
+
+LDFLAGS += -Wl,-z,noexecstack
+
 CFLAGS := -Wall -Wextra -g -Wa,--noexecstack \
           -I$(SRC_DIR) -I$(CACHE_DIR) -I$(ENGINE_DIR) \
           -I$(HTML_TEMPLATING_DIR) -I$(HTTP_SERVER_DIR) -I$(DATABASE_DIR) -I$(ROUTING_DIR)
@@ -89,7 +92,7 @@ migrate: $(CACHE_DIR)/model_paths $(CACHE_DIR)/db_backend
 		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	$(CC) $(CFLAGS) -o $(CACHE_DIR)/models/migrate \
-		$$MD_SRC $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS || exit 1; \
+		$$MD_SRC $(SRC_DIR)/config.c $$DB_SRC $$MODEL_SRCS $$DB_LIBS $(LDFLAGS) || exit 1; \
 	./$(CACHE_DIR)/models/migrate || (echo "Migration binary failed"; exit 1); \
 	echo "Migration finished."
 
@@ -121,7 +124,7 @@ $(TARGET):
 		echo "Unknown DB_BACKEND: $$DB_BACKEND"; exit 1; \
 	fi; \
 	echo "Linking server with DB backend $$DB_BACKEND ..."; \
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $$RUNTIME_DB_SRC $$OBJS $$DB_LIBS || { echo "Link failed"; exit 1; }; \
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $$RUNTIME_DB_SRC $$OBJS $$DB_LIBS $(LDFLAGS) || { echo "Link failed"; exit 1; }; \
 	echo "Server built: $(TARGET)"
 
 all: $(TARGET)
