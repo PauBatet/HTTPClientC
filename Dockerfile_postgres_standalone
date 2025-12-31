@@ -1,0 +1,26 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache \
+    bash coreutils build-base make \
+    libpq-dev postgresql-libs pkgconfig \
+    ca-certificates musl-dev gcompat
+
+WORKDIR /app
+COPY . .
+
+# 1. Only compile what we can without a DB connection.
+# If your 'make all' requires 'GeneratedModels.h', we need to 
+# make sure the compilation happens when the container starts instead.
+RUN make full_clean
+
+# 2. Set environment variables
+ENV PG_HOST=host.docker.internal
+ENV PG_PORT=5432
+ENV PG_DBNAME=appdb
+ENV PG_USER=appuser
+ENV PG_PASSWORD=apppassword
+
+EXPOSE 8080
+
+# 3. Use a startup script to migrate and then run
+CMD sh -c "make migrate && make all && ./.cache/build/server"

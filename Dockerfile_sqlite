@@ -1,0 +1,48 @@
+# -------- build stage --------
+FROM alpine:3.20 AS build
+
+RUN apk add --no-cache bash coreutils build-base sqlite-dev postgresql-dev ca-certificates musl-dev
+
+WORKDIR /app
+COPY . .
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# create necessary cache dirs
+RUN mkdir -p .cache .cache/build .cache/models
+
+# fix mktemp usage in Makefile
+RUN sed -i 's|mktemp /tmp/gen_model_paths.XXXX.c|mktemp -t gen_model_paths.XXXX.c|' Makefile
+RUN sed -i 's|mktemp /tmp/gen_db_backend.XXXX.c|mktemp -t gen_db_backend.XXXX.c|' Makefile
+
+# set TARGET to build output in /app/server
+RUN sed -i 's|^\(TARGET := \).*|TARGET=/app/server|' Makefile
+
+# full clean
+RUN make SHELL=/bin/bash full_clean || true
+
+# generate model paths and DB backend
+RUN make SHELL=/bin/bash ./.cache/model_paths
+RUN make SHELL=/bin/bash ./.cache/db_backend
+
+# build migration and server
+RUN make SHELL=/bin/bash migrate
+RUN make SHELL=/bin/bash all
+
+# sanity check
+RUN ls -l /app/server
+
+# -------- runtime stage --------
+FROM alpine:3.20
+
+RUN apk add --no-cache sqlite-libs ca-certificates
+
+WORKDIR /app
+COPY --from=build /app/server /app/server
+COPY --from=build /app/app.db /app/app.db
+COPY --from=build /app/templates /app/templates
+
+EXPOSE 8080
+
+CMD ["/app/server"]
+

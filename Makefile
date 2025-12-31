@@ -1,4 +1,5 @@
 ## Paths
+SHELL                := /bin/bash
 SRC_DIR              := ./
 CACHE_DIR            := $(SRC_DIR).cache
 ENGINE_DIR           := $(SRC_DIR).engine
@@ -18,6 +19,8 @@ CFLAGS := -Wall -Wextra -g -Wa,--noexecstack \
           -I$(SRC_DIR) -I$(CACHE_DIR) -I$(ENGINE_DIR) \
           -I$(HTML_TEMPLATING_DIR) -I$(HTTP_SERVER_DIR) -I$(DATABASE_DIR) -I$(ROUTING_DIR)
 
+CFLAGS += -I/usr/include/postgresql
+
 # Server sources (core sources compiled at link-time)
 SRCS := $(ENGINE_DIR)/main.c \
         $(SRC_DIR)/config.c \
@@ -28,9 +31,6 @@ SRCS := $(ENGINE_DIR)/main.c \
 
 TARGET := $(BUILD_DIR)/server
 
-.PHONY: all clean full_clean migrate run
-
-all: $(TARGET)
 
 # ------------------------------------------------------------
 # Utility targets: create cache files from config.c
@@ -40,7 +40,7 @@ all: $(TARGET)
 
 $(CACHE_DIR)/model_paths: $(SRC_DIR)/config.c | $(CACHE_DIR)
 	@echo "Generating model paths from config.c..."
-	@TMP=$$(mktemp /tmp/gen_model_paths.XXXX.c); \
+	@TMP=$$(mktemp -t gen_model_paths.XXXX.c); \
 	printf '%s\n' '#include "config.c"' > $$TMP; \
 	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
 	printf '%s\n' 'int main() { int i=0; while (MODEL_PATHS[i]) { printf("%s\n", MODEL_PATHS[i++]); } return 0; }' >> $$TMP; \
@@ -51,7 +51,7 @@ $(CACHE_DIR)/model_paths: $(SRC_DIR)/config.c | $(CACHE_DIR)
 
 $(CACHE_DIR)/db_backend: $(SRC_DIR)/config.c | $(CACHE_DIR)
 	@echo "Reading DB backend from config.c..."
-	@TMP=$$(mktemp /tmp/gen_db_backend.XXXX.c); \
+	@TMP=$$(mktemp -t gen_db_backend.XXXX.c); \
 	printf '%s\n' '#include "config.c"' > $$TMP; \
 	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
 	printf '%s\n' 'int main() { printf("%s", DB_BACKEND); return 0; }' >> $$TMP; \
@@ -124,6 +124,10 @@ $(TARGET):
 	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $$RUNTIME_DB_SRC $$OBJS $$DB_LIBS || { echo "Link failed"; exit 1; }; \
 	echo "Server built: $(TARGET)"
 
+all: $(TARGET)
+	@echo "Making server..."
+	@mkdir -p $(BUILD_DIR)
+
 run: $(TARGET)
 	@echo "Starting server..."
 	@mkdir -p $(BUILD_DIR)
@@ -146,7 +150,7 @@ $(CACHE_DIR)/tests:
 
 $(CACHE_DIR)/tests/mock_db_backend: $(SRC_DIR)/tests/mock_config.c | $(CACHE_DIR)/tests
 	@echo "Reading DB backend from config.c..."
-	@TMP=$$(mktemp /tmp/gen_db_backend.XXXX.c); \
+	@TMP=$$(mktemp -t gen_db_backend.XXXX.c); \
 	printf '%s\n' '#include "tests/mock_config.c"' > $$TMP; \
 	printf '%s\n' '#include <stdio.h>' >> $$TMP; \
 	printf '%s\n' 'int main() { printf("%s", DB_BACKEND); return 0; }' >> $$TMP; \

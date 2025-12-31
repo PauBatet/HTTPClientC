@@ -217,6 +217,16 @@ int run_worker() {
 }
 
 int main() {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
+    bool in_container = (getpid() == 1);
+
+    if (in_container) {
+        // Docker: run worker directly, no supervisor
+        return run_worker();
+    }
+
     while (1) {
         pid_t pid = fork();
 

@@ -1,6 +1,7 @@
 #ifndef HTTPSERVER_H
 #define HTTPSERVER_H
 
+#include <stdbool.h>
 #include<netinet/in.h>
 
 typedef struct {
