@@ -15,15 +15,15 @@ const char *MODEL_PATHS[] = {
 const int NUM_MODEL_DIRS = 1;
 
 // DB backend
-const char *DB_BACKEND = DB_SQLITE;
+const char *DB_BACKEND = DB_POSTGRES;
 
 // PostgreSQL connection info
-char *PG_HOST     = "127.0.0.1"; 
+char *PG_HOST     = ""; 
 int   PG_PORT     = 5432;
-char *PG_DBNAME   = "appdb";
-char *PG_USER     = "appuser";
-char *PG_PASSWORD = "apppassword";
-char *PG_SSLMODE  = "disable";
+char *PG_DBNAME   = "";
+char *PG_USER     = "";
+char *PG_PASSWORD = "";
+char *PG_SSLMODE  = "";
 
 // SQLite file path
 char *SQLITE_PATH = "app.db";

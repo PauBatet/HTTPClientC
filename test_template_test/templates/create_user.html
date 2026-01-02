@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Created</title>
+    <style>
+        body {
+            background: #1e1e1e;
+            color: #eaeaea;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            background: #2a2a2a;
+            padding: 24px 32px;
+            border-radius: 12px;
+            width: 320px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 22px;
+        }
+
+        .result {
+            text-align: center;
+            margin-bottom: 16px;
+            font-weight: bold;
+            color: #9be29b;
+        }
+
+        .field {
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #3a3a3a;
+            padding-bottom: 4px;
+        }
+
+        .label {
+            color: #bbbbbb;
+        }
+
+        .value {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>User Created</h1>
+
+    <div class="result">
+        {{ result }}
+    </div>
+
+    <div class="field">
+        <span class="label">Name</span>
+        <span class="value">{{ name }}</span>
+    </div>
+
+    <div class="field">
+        <span class="label">DNI</span>
+        <span class="value">{{ DNI }}</span>
+    </div>
+
+    <div class="field">
+        <span class="label">Age</span>
+        <span class="value">{{ age }}</span>
+    </div>
+
+    <div class="field">
+        <span class="label">Email</span>
+        <span class="value">{{email}}</span>
+    </div>
+
+    <div class="field">
+        <span class="label">Group ID</span>
+        <span class="value">{{group_id}}</span>
+    </div>
+</div>
+
+</body>
+</html>

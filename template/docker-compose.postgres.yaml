@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile_postgres
+    depends_on:
+      db:
+        condition: service_healthy
+#    env_file:
+#      - .env
+    command: sh -c "make full_clean && make migrate && make all && echo '--- FINDING SERVER BINARY ---' && find . -name server && echo '--- STARTING SERVER ---' && ./.cache/build/server"
+    environment:
+      - PG_HOST=db
+      - PG_PORT=5432
+      - PG_DBNAME=appdb
+      - PG_USER=appuser
+      - PG_PASSWORD=apppassword
+      - PG_SSLMODE=disable
+    volumes:
+      - ./templates:/app/templates
+    
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

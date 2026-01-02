@@ -1,0 +1,57 @@
+# -------- build stage --------
+FROM alpine:3.20 AS build
+
+RUN apk add --no-cache bash coreutils build-base sqlite-dev postgresql-dev ca-certificates musl-dev
+
+WORKDIR /app
+COPY . .
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# create necessary cache dirs
+RUN mkdir -p .cache .cache/build .cache/models
+
+# fix mktemp usage in Makefile
+RUN sed -i 's|mktemp /tmp/gen_model_paths.XXXX.c|mktemp -t gen_model_paths.XXXX.c|' Makefile
+RUN sed -i 's|mktemp /tmp/gen_db_backend.XXXX.c|mktemp -t gen_db_backend.XXXX.c|' Makefile
+
+# set TARGET to build output in /app/server
+RUN sed -i 's|^\(TARGET := \).*|TARGET=/app/server|' Makefile
+
+# full clean
+RUN make SHELL=/bin/bash full_clean || true
+
+# build migration and server
+RUN make SHELL=/bin/bash migrate
+RUN make SHELL=/bin/bash all
+
+# sanity check
+RUN ls -l /app/server
+
+# -------- runtime stage --------
+FROM alpine:3.20
+
+# Add bash to run the startup command string
+FROM alpine:3.20
+
+RUN apk add --no-cache sqlite-libs ca-certificates bash
+
+WORKDIR /app
+
+# 1. Copy the binaries from the locations defined by your Makefile/Sed overrides
+# Note: 'server' is at /app/server because of your sed override
+COPY --from=build /app/server /app/server
+
+# Note: 'migrate' is at /app/.cache/models/migrate based on your Makefile 'migrate' target
+COPY --from=build /app/.cache/models/migrate /app/migrate
+
+COPY --from=build /app/templates /app/templates
+
+# 2. Ensure the volume directory exists
+RUN mkdir -p /app/db_data
+
+EXPOSE 8080
+
+# 3. RUNTIME COMMAND: 
+# Run migration (it will use the SQLITE_PATH env var) then start server
+CMD ["/bin/bash", "-c", "./migrate && ./server"]
