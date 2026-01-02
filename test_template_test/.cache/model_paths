@@ -1,8 +1,0 @@
-models
-sqlite
-127.0.0.1
-appdb
-appuser
-apppassword
-disable
-app.db
